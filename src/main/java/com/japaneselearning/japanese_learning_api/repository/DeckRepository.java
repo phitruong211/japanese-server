@@ -8,6 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface DeckRepository extends JpaRepository<Deck, UUID> {
-    List<Deck> findAllByOwnerIdAndDeletedAtIsNullOrderByUpdatedAtDesc(UUID ownerId);
+    List<Deck> findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscUpdatedAtDesc(UUID ownerId);
     Optional<Deck> findByIdAndOwnerIdAndDeletedAtIsNull(UUID id, UUID ownerId);
 }

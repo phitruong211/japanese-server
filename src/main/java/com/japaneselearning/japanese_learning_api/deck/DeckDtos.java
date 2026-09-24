@@ -19,12 +19,19 @@ public final class DeckDtos {
             @Size(max = 255) String sourceName,
             @Size(max = 20) String importFormat,
             DomainTypes.Visibility visibility,
+            Map<String, Object> templateConfig,
             @Size(max = 20_000) List<@Valid CardRequest> cards) {}
 
     public record UpdateDeckRequest(
             @Size(min = 1, max = 200) String name,
             @Size(max = 5000) String description,
-            DomainTypes.Visibility visibility) {}
+            DomainTypes.Visibility visibility,
+            Map<String, Object> templateConfig) {}
+
+    public record ReorderDecksRequest(@NotEmpty List<@NotNull UUID> deckIds) {}
+    public record ReorderCardsRequest(@NotEmpty List<@NotNull UUID> cardIds) {}
+    public record MoveCardsRequest(@NotEmpty List<@NotNull UUID> cardIds, @NotNull UUID targetDeckId,
+                                   @PositiveOrZero Integer targetPosition) {}
 
     public record CardRequest(
             @NotBlank @Size(max = 20_000) String front,
@@ -47,7 +54,8 @@ public final class DeckDtos {
 
     public record DeckSummary(UUID id, String name, String description, DomainTypes.SourceType sourceType,
                               String sourceName, String importFormat, DomainTypes.Visibility visibility,
-                              int cardCount, Instant createdAt, Instant updatedAt) {}
+                              int cardCount, int position, Map<String, Object> templateConfig,
+                              Instant createdAt, Instant updatedAt) {}
     public record CardResponse(UUID id, UUID deckId, String front, String back, String reading, String notes,
                                DomainTypes.CardKind kind, int position, String externalId,
                                Map<String, Object> extraData, Instant createdAt, Instant updatedAt) {}

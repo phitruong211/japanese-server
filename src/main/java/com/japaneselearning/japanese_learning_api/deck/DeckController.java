@@ -34,6 +34,12 @@ public class DeckController {
         return service.update(CurrentUser.id(auth), deckId, request);
     }
 
+    @PutMapping("/decks/reorder")
+    List<DeckDtos.DeckSummary> reorderDecks(Authentication auth,
+                                             @Valid @RequestBody DeckDtos.ReorderDecksRequest request) {
+        return service.reorderDecks(CurrentUser.id(auth), request);
+    }
+
     @DeleteMapping("/decks/{deckId}") @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(Authentication auth, @PathVariable UUID deckId) { service.delete(CurrentUser.id(auth), deckId); }
 
@@ -47,6 +53,18 @@ public class DeckController {
     DeckDtos.CardResponse updateCard(Authentication auth, @PathVariable UUID cardId,
                                      @Valid @RequestBody DeckDtos.UpdateCardRequest request) {
         return service.updateCard(CurrentUser.id(auth), cardId, request);
+    }
+
+    @PutMapping("/decks/{deckId}/cards/reorder")
+    List<DeckDtos.CardResponse> reorderCards(Authentication auth, @PathVariable UUID deckId,
+                                              @Valid @RequestBody DeckDtos.ReorderCardsRequest request) {
+        return service.reorderCards(CurrentUser.id(auth), deckId, request);
+    }
+
+    @PostMapping("/cards/move")
+    List<DeckDtos.CardResponse> moveCards(Authentication auth,
+                                           @Valid @RequestBody DeckDtos.MoveCardsRequest request) {
+        return service.moveCards(CurrentUser.id(auth), request);
     }
 
     @DeleteMapping("/cards/{cardId}") @ResponseStatus(HttpStatus.NO_CONTENT)
