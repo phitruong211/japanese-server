@@ -16,7 +16,30 @@ public class DeckController {
     public DeckController(DeckService service) { this.service = service; }
 
     @GetMapping("/decks")
-    List<DeckDtos.DeckSummary> list(Authentication auth) { return service.list(CurrentUser.id(auth)); }
+    Object list(Authentication auth, @RequestParam(required = false) Integer page,
+                @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "updatedAt,desc") String sort) {
+        return page == null ? service.list(CurrentUser.id(auth)) : service.listPage(CurrentUser.id(auth), page, size, sort);
+    }
+
+    @GetMapping("/decks/{deckId}/metadata")
+    DeckDtos.DeckSummary metadata(Authentication auth, @PathVariable UUID deckId) { return service.metadata(CurrentUser.id(auth), deckId); }
+
+    @GetMapping("/decks/{deckId}/card-ids")
+    List<UUID> cardIds(Authentication auth, @PathVariable UUID deckId) { return service.cardIds(CurrentUser.id(auth), deckId); }
+
+    @GetMapping("/decks/{deckId}/cards")
+    DeckDtos.PageResponse<DeckDtos.CardResponse> cards(Authentication auth, @PathVariable UUID deckId,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String query, @RequestParam(required = false) String type,
+            @RequestParam(required = false) String state) {
+        return service.cardPage(CurrentUser.id(auth), deckId, page, size, query, type, state);
+    }
+
+    @PostMapping("/decks/import") @ResponseStatus(HttpStatus.CREATED)
+    DeckDtos.DeckResponse importDeck(Authentication auth, @RequestHeader("Idempotency-Key") String key,
+            @Valid @RequestBody DeckDtos.CreateDeckRequest request) {
+        return service.importDeck(CurrentUser.id(auth), key, request);
+    }
 
     @GetMapping("/decks/{deckId}")
     DeckDtos.DeckResponse get(Authentication auth, @PathVariable UUID deckId) {

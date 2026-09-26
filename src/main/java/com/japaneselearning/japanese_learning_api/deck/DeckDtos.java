@@ -20,7 +20,10 @@ public final class DeckDtos {
             @Size(max = 20) String importFormat,
             DomainTypes.Visibility visibility,
             Map<String, Object> templateConfig,
-            @Size(max = 20_000) List<@Valid CardRequest> cards) {}
+            @Size(max = 20_000) List<@NotNull @Valid CardRequest> cards,
+            @Pattern(regexp = "MANUAL|IMPORT|BUILT_IN") String source,
+            @Size(max = 1000) String sourceRef, @Size(max = 255) String sourceSheet,
+            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags) {}
 
     public record UpdateDeckRequest(
             @Size(min = 1, max = 200) String name,
@@ -41,7 +44,8 @@ public final class DeckDtos {
             DomainTypes.CardKind kind,
             @PositiveOrZero Integer position,
             @Size(max = 255) String externalId,
-            Map<String, Object> extraData) {}
+            Map<String, Object> extraData,
+            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags) {}
 
     public record UpdateCardRequest(
             @Size(min = 1, max = 20_000) String front,
@@ -50,14 +54,24 @@ public final class DeckDtos {
             @Size(max = 20_000) String notes,
             DomainTypes.CardKind kind,
             @PositiveOrZero Integer position,
-            Map<String, Object> extraData) {}
+            Map<String, Object> extraData,
+            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags) {}
 
     public record DeckSummary(UUID id, String name, String description, DomainTypes.SourceType sourceType,
                               String sourceName, String importFormat, DomainTypes.Visibility visibility,
                               int cardCount, int position, Map<String, Object> templateConfig,
-                              Instant createdAt, Instant updatedAt) {}
+                              Instant createdAt, Instant updatedAt, String source, String sourceRef, String sourceSheet,
+                              List<String> tags, long newCount, long dueCount) {}
     public record CardResponse(UUID id, UUID deckId, String front, String back, String reading, String notes,
                                DomainTypes.CardKind kind, int position, String externalId,
-                               Map<String, Object> extraData, Instant createdAt, Instant updatedAt) {}
+                               Map<String, Object> extraData, Instant createdAt, Instant updatedAt, List<String> tags,
+                               ProgressResponse progress, String source, String sourceRef, String sourceSheet) {}
+    public record ProgressResponse(DomainTypes.AnkiState state, Instant dueAt, Instant lastReviewedAt,
+                                   int repetitions, int lapses, java.math.BigDecimal easeFactor, Integer intervalMinutes, Integer intervalDays) {}
+    public record PageResponse<T>(List<T> content, long totalElements, int totalPages, int number, int size) {
+        public static <T> PageResponse<T> from(org.springframework.data.domain.Page<T> page) {
+            return new PageResponse<>(page.getContent(), page.getTotalElements(), page.getTotalPages(), page.getNumber(), page.getSize());
+        }
+    }
     public record DeckResponse(DeckSummary deck, List<CardResponse> cards) {}
 }

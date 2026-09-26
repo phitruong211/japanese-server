@@ -47,11 +47,13 @@ public class AnkiService {
     @Transactional(readOnly = true)
     public List<AnkiDtos.QueueCard> queue(UUID userId, UUID deckId, int limit) {
         if (limit < 1 || limit > 200) throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "limit phải từ 1 đến 200");
+        if (deckId != null) decks.findByIdAndOwnerIdAndDeletedAtIsNull(deckId, userId)
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy bộ thẻ"));
         List<AnkiDtos.QueueCard> result = new ArrayList<>();
-        progressRepository.findDue(userId, deckId, Instant.now()).stream().limit(limit)
+        progressRepository.findDue(userId, deckId, Instant.now(), org.springframework.data.domain.PageRequest.of(0, limit)).stream()
                 .forEach(progress -> result.add(queueCard(progress.getCard(), response(progress))));
         if (result.size() < limit) {
-            cards.findNewForAnki(userId, deckId).stream().limit(limit - result.size())
+            cards.findNewForAnki(userId, deckId, org.springframework.data.domain.PageRequest.of(0, limit - result.size())).stream()
                     .forEach(card -> result.add(queueCard(card, null)));
         }
         return result;
@@ -60,6 +62,7 @@ public class AnkiService {
     @Transactional
     public AnkiDtos.ReviewResponse review(UUID userId, UUID cardId, AnkiDtos.ReviewRequest request) {
         Card card = cards.findByIdAndDeckOwnerIdAndDeletedAtIsNull(cardId, userId)
+                .filter(cardValue -> cardValue.getDeck().getDeletedAt() == null)
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
         User user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
         AnkiCardProgress progress = progressRepository.findByUserIdAndCardId(userId, cardId)

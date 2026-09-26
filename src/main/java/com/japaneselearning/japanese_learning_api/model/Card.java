@@ -32,5 +32,8 @@ public class Card {
     @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @UpdateTimestamp @Column(name = "updated_at", nullable = false) private Instant updatedAt;
     @Column(name = "deleted_at") private Instant deletedAt;
+    @Column(length = 30) private String source;
+    @Column(name = "source_ref", length = 1000) private String sourceRef;
+    @Column(name = "source_sheet") private String sourceSheet;
     @Version private long version;
 }
