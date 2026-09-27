@@ -101,7 +101,7 @@ public class AnkiService {
 
     private AnkiDtos.QueueCard queueCard(Card card, AnkiDtos.ProgressResponse progress) {
         return new AnkiDtos.QueueCard(card.getId(), card.getDeck().getId(), card.getDeck().getName(), card.getFront(),
-                card.getBack(), card.getReading(), card.getNotes(), card.getKind(), progress);
+                card.getBack(), card.getReading(), card.getNotes(), card.getKind(), card.getExtraData(), progress);
     }
 
     private AnkiDtos.ProgressResponse response(AnkiCardProgress progress) {

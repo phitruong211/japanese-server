@@ -77,7 +77,9 @@ class DeckServiceIntegrationTest {
     @Test void queueIsBoundedAndDeletedDeckCannotBeReviewed() {
         UUID owner = user(), stranger = user();
         var deck = service.create(owner, request("Queue", List.of(card("one"), card("two"), card("three"))));
-        assertThat(anki.queue(owner, deck.deck().id(), 1)).hasSize(1);
+        var queue = anki.queue(owner, deck.deck().id(), 1);
+        assertThat(queue).hasSize(1);
+        assertThat(queue.getFirst().extraData()).containsEntry("custom", "preserved");
         assertThatThrownBy(() -> anki.queue(stranger, deck.deck().id(), 1)).isInstanceOf(ApiException.class);
         service.delete(owner, deck.deck().id());
         assertThatThrownBy(() -> anki.queue(owner, deck.deck().id(), 1)).isInstanceOf(ApiException.class);

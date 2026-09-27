@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 public final class AnkiDtos {
@@ -20,6 +21,7 @@ public final class AnkiDtos {
 
     public record QueueCard(UUID cardId, UUID deckId, String deckName, String front, String back,
                             String reading, String notes, DomainTypes.CardKind kind,
+                            Map<String, Object> extraData,
                             ProgressResponse progress) {}
 
     public record ReviewResponse(UUID cardId, DomainTypes.AnkiRating rating, ProgressResponse progress) {}
