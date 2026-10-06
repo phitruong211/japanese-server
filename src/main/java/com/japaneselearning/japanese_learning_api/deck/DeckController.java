@@ -31,8 +31,9 @@ public class DeckController {
     DeckDtos.PageResponse<DeckDtos.CardResponse> cards(Authentication auth, @PathVariable UUID deckId,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String query, @RequestParam(required = false) String type,
-            @RequestParam(required = false) String state) {
-        return service.cardPage(CurrentUser.id(auth), deckId, page, size, query, type, state);
+            @RequestParam(required = false) String state,
+            @RequestParam(defaultValue = "true") boolean includeProgress) {
+        return service.cardPage(CurrentUser.id(auth), deckId, page, size, query, type, state, includeProgress);
     }
 
     @PostMapping("/decks/import") @ResponseStatus(HttpStatus.CREATED)

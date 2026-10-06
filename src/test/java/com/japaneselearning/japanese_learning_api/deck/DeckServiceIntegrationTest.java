@@ -13,7 +13,15 @@ import java.util.*;
 import java.time.Instant;
 import static org.assertj.core.api.Assertions.*;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "spring.config.import=",
+    "spring.datasource.url=jdbc:h2:mem:deck-tests;MODE=MySQL;DB_CLOSE_DELAY=-1",
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "spring.datasource.username=sa", "spring.datasource.password=",
+    "spring.jpa.hibernate.ddl-auto=create-drop", "spring.flyway.enabled=false",
+    "spring.jpa.properties.hibernate.generate_statistics=true",
+    "logging.level.org.hibernate.stat=ERROR"
+})
 class DeckServiceIntegrationTest {
     @Autowired DeckService service;
     @Autowired com.japaneselearning.japanese_learning_api.anki.AnkiService anki;
@@ -21,6 +29,54 @@ class DeckServiceIntegrationTest {
     @Autowired DeckRepository decks;
     @Autowired EntityManager em;
     @Autowired PlatformTransactionManager transactions;
+    @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
+
+    @Test void deckListCountsRemainCorrectWithoutQueriesPerDeck() {
+        UUID owner = user();
+        var first = service.create(owner, request("First", List.of(card("one"), card("two"))));
+        service.create(owner, request("Empty", List.of()));
+        service.create(owner, request("Third", List.of(card("three"))));
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            var progress = new AnkiCardProgress();
+            progress.setId(UUID.randomUUID());
+            progress.setUser(em.getReference(User.class, owner));
+            progress.setCard(em.getReference(Card.class, first.cards().get(0).id()));
+            progress.setState(DomainTypes.AnkiState.REVIEW);
+            progress.setDueAt(Instant.now().minusSeconds(60));
+            em.persist(progress);
+        });
+        var statistics = entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        statistics.clear();
+        var listed = service.listPage(owner, 0, 20, "name,asc");
+        System.out.println("Deck list SQL statements: " + statistics.getPrepareStatementCount());
+        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(3);
+        assertThat(listed.content()).hasSize(3);
+        var result = listed.content().stream().filter(deck -> deck.id().equals(first.deck().id())).findFirst().orElseThrow();
+        assertThat(result.newCount()).isEqualTo(1);
+        assertThat(result.dueCount()).isEqualTo(1);
+        assertThat(listed.content().stream().filter(deck -> deck.name().equals("Empty")).findFirst().orElseThrow().newCount()).isZero();
+        statistics.clear();
+        var withProgress = service.cardPage(owner, first.deck().id(), 0, 50, "", "", "");
+        long fullStatements = statistics.getPrepareStatementCount();
+        assertThat(withProgress.content().stream().filter(card -> card.id().equals(first.cards().get(0).id())).findFirst().orElseThrow().progress()).isNotNull();
+        statistics.clear();
+        var contentOnly = service.cardPage(owner, first.deck().id(), 0, 50, "", "", "", false);
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(fullStatements - 1);
+        assertThat(contentOnly.content()).allMatch(card -> card.progress() == null);
+        assertThat(contentOnly.content()).extracting(DeckDtos.CardResponse::id).containsExactlyElementsOf(withProgress.content().stream().map(DeckDtos.CardResponse::id).toList());
+    }
+
+    @Test void importingManyCardsDoesNotSelectBeforeEveryInsert() {
+        UUID owner = user();
+        var statistics = entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        statistics.clear();
+        var created = service.create(owner, request("Bulk", java.util.stream.IntStream.range(0, 200).mapToObj(i -> card("card-" + i)).toList()));
+        assertThat(created.cards()).hasSize(200);
+        System.out.println("Import 200 cards SQL statements prepared: " + statistics.getPrepareStatementCount());
+        assertThat(statistics.getEntityInsertCount()).isEqualTo(201);
+        assertThat(statistics.getPrepareStatementCount()).isLessThan(20);
+        assertThat(service.cardPage(owner, created.deck().id(), 0, 200, "", "", "").content()).hasSize(200);
+    }
 
     UUID user() {
         var user = new User(); user.setId(UUID.randomUUID()); user.setEmail(user.getId()+"@deck.test");

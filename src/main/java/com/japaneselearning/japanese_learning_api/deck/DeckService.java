@@ -31,7 +31,9 @@ public class DeckService {
 
     @Transactional(readOnly = true)
     public List<DeckDtos.DeckSummary> list(UUID userId) {
-        return decks.findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscUpdatedAtDesc(userId).stream().map(this::summary).toList();
+        var owned = decks.findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscUpdatedAtDesc(userId);
+        var counts = deckCounts(owned, userId);
+        return owned.stream().map(deck -> summary(deck, counts.get(deck.getId()))).toList();
     }
 
     @Transactional(readOnly = true)
@@ -62,10 +64,12 @@ public class DeckService {
         deck.setPosition((int) decks.countByOwnerIdAndDeletedAtIsNull(userId));
         List<DeckDtos.CardRequest> requestedCards = request.cards() == null ? List.of() : request.cards();
         deck.setCardCount(requestedCards.size());
-        decks.save(deck);
+        em.persist(deck);
         List<Card> savedCards = new ArrayList<>();
         for (int i = 0; i < requestedCards.size(); i++) {
-            savedCards.add(cards.save(newCard(deck, requestedCards.get(i), i)));
+            Card card = newCard(deck, requestedCards.get(i), i);
+            em.persist(card);
+            savedCards.add(card);
         }
         return new DeckDtos.DeckResponse(summary(deck), savedCards.stream().map(this::cardResponse).toList());
     }
@@ -200,11 +204,26 @@ public class DeckService {
     }
 
     private DeckDtos.DeckSummary summary(Deck deck) {
+        return summary(deck, cards.countNew(deck.getId(), deck.getOwner().getId()), cards.countDue(deck.getId(), deck.getOwner().getId(), Instant.now()));
+    }
+
+    private Map<UUID, CardRepository.DeckCounts> deckCounts(List<Deck> owned, UUID userId) {
+        Map<UUID, CardRepository.DeckCounts> counts = new HashMap<>();
+        if (!owned.isEmpty()) cards.countByDecks(owned.stream().map(Deck::getId).toList(), userId, Instant.now())
+                .forEach(count -> counts.put(count.getDeckId(), count));
+        return counts;
+    }
+
+    private DeckDtos.DeckSummary summary(Deck deck, CardRepository.DeckCounts counts) {
+        return summary(deck, counts == null ? 0 : counts.getNewCount(), counts == null ? 0 : counts.getDueCount());
+    }
+
+    private DeckDtos.DeckSummary summary(Deck deck, long newCount, long dueCount) {
         return new DeckDtos.DeckSummary(deck.getId(), deck.getName(), deck.getDescription(), deck.getSourceType(),
                 deck.getSourceName(), deck.getImportFormat(), deck.getVisibility(), deck.getCardCount(),
                 deck.getPosition(), deck.getTemplateConfig(), deck.getCreatedAt(), deck.getUpdatedAt(),
                 deck.getSource(), deck.getSourceRef(), deck.getSourceSheet(), deck.getTags() == null ? List.of() : deck.getTags(),
-                cards.countNew(deck.getId(), deck.getOwner().getId()), cards.countDue(deck.getId(), deck.getOwner().getId(), Instant.now()));
+                newCount, dueCount);
     }
 
     private DeckDtos.CardResponse cardResponse(Card card) {
@@ -219,7 +238,9 @@ public class DeckService {
         String[] parts = sort.split(",");
         if (!Set.of("updatedAt", "createdAt", "name", "position").contains(parts[0])) throw bad("Trường sắp xếp không hợp lệ");
         var direction = parts.length > 1 && parts[1].equalsIgnoreCase("asc") ? org.springframework.data.domain.Sort.Direction.ASC : org.springframework.data.domain.Sort.Direction.DESC;
-        return DeckDtos.PageResponse.from(decks.findAllByOwnerIdAndDeletedAtIsNull(userId, pageRequest(page, size, org.springframework.data.domain.Sort.by(direction, parts[0]).and(org.springframework.data.domain.Sort.by("id")))).map(this::summary));
+        var result = decks.findAllByOwnerIdAndDeletedAtIsNull(userId, pageRequest(page, size, org.springframework.data.domain.Sort.by(direction, parts[0]).and(org.springframework.data.domain.Sort.by("id"))));
+        var counts = deckCounts(result.getContent(), userId);
+        return DeckDtos.PageResponse.from(result.map(deck -> summary(deck, counts.get(deck.getId()))));
     }
 
     @Transactional(readOnly = true)
@@ -227,6 +248,11 @@ public class DeckService {
 
     @Transactional(readOnly = true)
     public DeckDtos.PageResponse<DeckDtos.CardResponse> cardPage(UUID userId, UUID deckId, int page, int size, String query, String type, String state) {
+        return cardPage(userId, deckId, page, size, query, type, state, true);
+    }
+
+    @Transactional(readOnly = true)
+    public DeckDtos.PageResponse<DeckDtos.CardResponse> cardPage(UUID userId, UUID deckId, int page, int size, String query, String type, String state, boolean includeProgress) {
         ownedDeck(userId, deckId);
         final DomainTypes.CardKind kind;
         final DomainTypes.AnkiState progressState;
@@ -259,7 +285,7 @@ public class DeckService {
         }, pageRequest(page, size, org.springframework.data.domain.Sort.by("position", "id")));
         var ids = result.getContent().stream().map(Card::getId).toList();
         Map<UUID, com.japaneselearning.japanese_learning_api.model.AnkiCardProgress> byId = new HashMap<>();
-        if (!ids.isEmpty()) em.createQuery("select p from AnkiCardProgress p where p.user.id = :user and p.card.id in :ids", com.japaneselearning.japanese_learning_api.model.AnkiCardProgress.class)
+        if (includeProgress && !ids.isEmpty()) em.createQuery("select p from AnkiCardProgress p where p.user.id = :user and p.card.id in :ids", com.japaneselearning.japanese_learning_api.model.AnkiCardProgress.class)
                 .setParameter("user", userId).setParameter("ids", ids).getResultList().forEach(p -> byId.put(p.getCard().getId(), p));
         return DeckDtos.PageResponse.from(result.map(card -> {
             var r = cardResponse(card); var p = byId.get(card.getId());

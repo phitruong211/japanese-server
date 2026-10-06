@@ -10,6 +10,20 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface CardRepository extends JpaRepository<Card, UUID>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Card> {
+    interface DeckCounts {
+        UUID getDeckId();
+        long getNewCount();
+        long getDueCount();
+    }
+    @Query("""
+        select c.deck.id as deckId,
+          sum(case when p.id is null or p.state = com.japaneselearning.japanese_learning_api.model.DomainTypes$AnkiState.NEW then 1 else 0 end) as newCount,
+          sum(case when p.state <> com.japaneselearning.japanese_learning_api.model.DomainTypes$AnkiState.NEW and p.dueAt <= :now then 1 else 0 end) as dueCount
+        from Card c left join AnkiCardProgress p on p.card.id = c.id and p.user.id = :userId
+        where c.deck.id in :deckIds and c.deletedAt is null
+        group by c.deck.id
+        """)
+    List<DeckCounts> countByDecks(@Param("deckIds") List<UUID> deckIds, @Param("userId") UUID userId, @Param("now") java.time.Instant now);
     List<Card> findAllByDeckIdAndDeletedAtIsNullOrderByPosition(UUID deckId);
     Optional<Card> findByIdAndDeckOwnerIdAndDeletedAtIsNull(UUID id, UUID ownerId);
     long countByDeckIdAndDeletedAtIsNull(UUID deckId);
