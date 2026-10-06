@@ -25,7 +25,13 @@ public class UserSettingsController {
         UserSettings settings = find(CurrentUser.id(auth));
         if (request.theme() != null) settings.setTheme(request.theme());
         if (request.fontSize() != null) settings.setFontSize(request.fontSize());
-        if (request.showFurigana() != null) settings.setShowFurigana(request.showFurigana());
+        if (request.showFurigana() != null) {
+            settings.setShowFurigana(request.showFurigana());
+            settings.setShowFuriganaFront(request.showFurigana());
+            settings.setShowFuriganaBack(request.showFurigana());
+        }
+        if (request.showFuriganaFront() != null) settings.setShowFuriganaFront(request.showFuriganaFront());
+        if (request.showFuriganaBack() != null) settings.setShowFuriganaBack(request.showFuriganaBack());
         if (request.autoPlayAudio() != null) settings.setAutoPlayAudio(request.autoPlayAudio());
         if (request.dailyGoal() != null) settings.setDailyGoal(request.dailyGoal());
         if (request.ankiSessionMinutes() != null) settings.setAnkiSessionMinutes(request.ankiSessionMinutes());
@@ -39,6 +45,7 @@ public class UserSettingsController {
 
     private UserSettingsDtos.Response response(UserSettings s) {
         return new UserSettingsDtos.Response(s.getTheme(), s.getFontSize(), s.isShowFurigana(), s.isAutoPlayAudio(),
-                s.getDailyGoal(), s.getAnkiSessionMinutes(), s.isReducedMotion());
+                s.getDailyGoal(), s.getAnkiSessionMinutes(), s.isReducedMotion(),
+                s.isShowFuriganaFront(), s.isShowFuriganaBack());
     }
 }

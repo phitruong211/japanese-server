@@ -18,6 +18,8 @@ public class UserSettings {
     @Column(nullable = false, length = 30) private String theme = "light";
     @Column(name = "font_size", nullable = false, length = 20) private String fontSize = "medium";
     @Column(name = "show_furigana", nullable = false) private boolean showFurigana = true;
+    @Column(name = "show_furigana_front", nullable = false) private boolean showFuriganaFront = true;
+    @Column(name = "show_furigana_back", nullable = false) private boolean showFuriganaBack = true;
     @Column(name = "auto_play_audio", nullable = false) private boolean autoPlayAudio;
     @Column(name = "daily_goal", nullable = false) private int dailyGoal = 20;
     @Column(name = "anki_session_minutes", nullable = false) private int ankiSessionMinutes;
