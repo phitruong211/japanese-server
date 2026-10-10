@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 @Service
@@ -204,26 +206,41 @@ public class DeckService {
     }
 
     private DeckDtos.DeckSummary summary(Deck deck) {
-        return summary(deck, cards.countNew(deck.getId(), deck.getOwner().getId()), cards.countDue(deck.getId(), deck.getOwner().getId(), Instant.now()));
+        return summary(deck, deckCounts(List.of(deck), deck.getOwner().getId()).get(deck.getId()));
     }
 
     private Map<UUID, CardRepository.DeckCounts> deckCounts(List<Deck> owned, UUID userId) {
         Map<UUID, CardRepository.DeckCounts> counts = new HashMap<>();
-        if (!owned.isEmpty()) cards.countByDecks(owned.stream().map(Deck::getId).toList(), userId, Instant.now())
+        if (!owned.isEmpty()) cards.countByDecks(owned.stream().map(Deck::getId).toList(), userId, Instant.now(), todayStart(owned.getFirst().getOwner()))
                 .forEach(count -> counts.put(count.getDeckId(), count));
         return counts;
     }
 
-    private DeckDtos.DeckSummary summary(Deck deck, CardRepository.DeckCounts counts) {
-        return summary(deck, counts == null ? 0 : counts.getNewCount(), counts == null ? 0 : counts.getDueCount());
+    private Instant todayStart(User user) {
+        try {
+            ZoneId zone = ZoneId.of(user.getTimezone());
+            return LocalDate.now(zone).atStartOfDay(zone).toInstant();
+        } catch (RuntimeException ignored) {
+            return LocalDate.now(ZoneId.of("UTC")).atStartOfDay(ZoneId.of("UTC")).toInstant();
+        }
     }
 
-    private DeckDtos.DeckSummary summary(Deck deck, long newCount, long dueCount) {
+    private DeckDtos.DeckSummary summary(Deck deck, CardRepository.DeckCounts counts) {
+        return summary(deck,
+                counts == null ? 0 : counts.getNewCount(),
+                counts == null ? 0 : counts.getDueCount(),
+                counts == null ? 0 : counts.getLearnedCount(),
+                counts == null ? 0 : counts.getStudiedTodayCount(),
+                counts == null ? 0 : counts.getNewStartedTodayCount());
+    }
+
+    private DeckDtos.DeckSummary summary(Deck deck, long newCount, long dueCount, long learnedCount,
+                                         long studiedTodayCount, long newStartedTodayCount) {
         return new DeckDtos.DeckSummary(deck.getId(), deck.getName(), deck.getDescription(), deck.getSourceType(),
                 deck.getSourceName(), deck.getImportFormat(), deck.getVisibility(), deck.getCardCount(),
                 deck.getPosition(), deck.getTemplateConfig(), deck.getCreatedAt(), deck.getUpdatedAt(),
                 deck.getSource(), deck.getSourceRef(), deck.getSourceSheet(), deck.getTags() == null ? List.of() : deck.getTags(),
-                newCount, dueCount);
+                newCount, dueCount, learnedCount, studiedTodayCount, newStartedTodayCount);
     }
 
     private DeckDtos.CardResponse cardResponse(Card card) {

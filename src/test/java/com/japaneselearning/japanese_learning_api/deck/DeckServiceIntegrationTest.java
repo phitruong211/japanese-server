@@ -43,6 +43,8 @@ class DeckServiceIntegrationTest {
             progress.setCard(em.getReference(Card.class, first.cards().get(0).id()));
             progress.setState(DomainTypes.AnkiState.REVIEW);
             progress.setDueAt(Instant.now().minusSeconds(60));
+            progress.setLastReviewedAt(Instant.now());
+            progress.setRepetitions(1);
             em.persist(progress);
         });
         var statistics = entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
@@ -54,6 +56,9 @@ class DeckServiceIntegrationTest {
         var result = listed.content().stream().filter(deck -> deck.id().equals(first.deck().id())).findFirst().orElseThrow();
         assertThat(result.newCount()).isEqualTo(1);
         assertThat(result.dueCount()).isEqualTo(1);
+        assertThat(result.learnedCount()).isEqualTo(1);
+        assertThat(result.studiedTodayCount()).isEqualTo(1);
+        assertThat(result.newStartedTodayCount()).isEqualTo(1);
         assertThat(listed.content().stream().filter(deck -> deck.name().equals("Empty")).findFirst().orElseThrow().newCount()).isZero();
         statistics.clear();
         var withProgress = service.cardPage(owner, first.deck().id(), 0, 50, "", "", "");

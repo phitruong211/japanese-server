@@ -61,7 +61,8 @@ public final class DeckDtos {
                               String sourceName, String importFormat, DomainTypes.Visibility visibility,
                               int cardCount, int position, Map<String, Object> templateConfig,
                               Instant createdAt, Instant updatedAt, String source, String sourceRef, String sourceSheet,
-                              List<String> tags, long newCount, long dueCount) {}
+                              List<String> tags, long newCount, long dueCount, long learnedCount,
+                              long studiedTodayCount, long newStartedTodayCount) {}
     public record CardResponse(UUID id, UUID deckId, String front, String back, String reading, String notes,
                                DomainTypes.CardKind kind, int position, String externalId,
                                Map<String, Object> extraData, Instant createdAt, Instant updatedAt, List<String> tags,
