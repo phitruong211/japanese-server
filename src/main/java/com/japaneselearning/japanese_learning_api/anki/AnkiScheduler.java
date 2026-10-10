@@ -2,100 +2,91 @@ package com.japaneselearning.japanese_learning_api.anki;
 
 import com.japaneselearning.japanese_learning_api.model.AnkiCardProgress;
 import com.japaneselearning.japanese_learning_api.model.DomainTypes;
+import com.japaneselearning.japanese_learning_api.model.UserSettings;
+import io.github.openspacedrepetition.Card;
+import io.github.openspacedrepetition.Rating;
+import io.github.openspacedrepetition.Scheduler;
+import io.github.openspacedrepetition.State;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
 
+/** Isolates the official FSRS library from the application's persistence model. */
 @Component
 public class AnkiScheduler {
-    private static final List<Integer> LEARNING_STEPS = List.of(1, 10, 60);
-    private static final BigDecimal MIN_EASE = new BigDecimal("1.30");
-    private static final BigDecimal HARD_PENALTY = new BigDecimal("0.15");
-    private static final BigDecimal AGAIN_PENALTY = new BigDecimal("0.20");
-    private static final BigDecimal EASY_BONUS = new BigDecimal("0.15");
+    public void apply(AnkiCardProgress progress, DomainTypes.AnkiRating rating, Instant now,
+                      Integer responseTimeMs, UserSettings settings, boolean enableFuzzing) {
+        DomainTypes.AnkiState previousState = progress.getState();
+        Instant previousReview = progress.getLastReviewedAt();
+        Card input = toFsrsCard(progress, now);
+        Scheduler scheduler = Scheduler.builder()
+                .desiredRetention(settings.getSrsDesiredRetention().doubleValue())
+                .learningSteps(new Duration[]{
+                        Duration.ofMinutes(settings.getSrsAgainMinutes()),
+                        Duration.ofMinutes(settings.getSrsGoodMinutes())})
+                .relearningSteps(new Duration[]{Duration.ofMinutes(settings.getSrsAgainMinutes())})
+                .maximumInterval(36500)
+                .enableFuzzing(enableFuzzing)
+                .build();
+        Card result = scheduler.reviewCard(input, Rating.valueOf(rating.name()), now, responseTimeMs).card();
 
-    public void apply(AnkiCardProgress progress, DomainTypes.AnkiRating rating, Instant now) {
-        progress.setLastReviewedAt(now);
-        if (progress.getState() == DomainTypes.AnkiState.REVIEW) applyReview(progress, rating, now);
-        else applyLearning(progress, rating, now);
-    }
-
-    private void applyLearning(AnkiCardProgress progress, DomainTypes.AnkiRating rating, Instant now) {
-        int currentStep = progress.getIntervalMinutes() == null
-                ? 0
-                : Math.max(0, LEARNING_STEPS.indexOf(progress.getIntervalMinutes()));
-        switch (rating) {
-            case AGAIN -> {
-                progress.setIntervalMinutes(1);
-                progress.setDueAt(now.plus(1, ChronoUnit.MINUTES));
-                progress.setState(progress.getState() == DomainTypes.AnkiState.RELEARNING
-                        ? DomainTypes.AnkiState.RELEARNING : DomainTypes.AnkiState.LEARNING);
-            }
-            case HARD -> {
-                int minutes = LEARNING_STEPS.get(currentStep);
-                progress.setIntervalMinutes(minutes);
-                progress.setDueAt(now.plus(minutes, ChronoUnit.MINUTES));
-                progress.setState(progress.getState() == DomainTypes.AnkiState.RELEARNING
-                        ? DomainTypes.AnkiState.RELEARNING : DomainTypes.AnkiState.LEARNING);
-            }
-            case GOOD -> {
-                if (currentStep + 1 >= LEARNING_STEPS.size()) graduate(progress, 1, now);
-                else {
-                    int minutes = LEARNING_STEPS.get(currentStep + 1);
-                    progress.setIntervalMinutes(minutes);
-                    progress.setDueAt(now.plus(minutes, ChronoUnit.MINUTES));
-                    progress.setState(progress.getState() == DomainTypes.AnkiState.RELEARNING
-                            ? DomainTypes.AnkiState.RELEARNING : DomainTypes.AnkiState.LEARNING);
-                }
-            }
-            case EASY -> {
-                progress.setEaseFactor(maxEase(progress.getEaseFactor().add(EASY_BONUS)));
-                graduate(progress, 4, now);
-            }
-        }
-    }
-
-    private void applyReview(AnkiCardProgress progress, DomainTypes.AnkiRating rating, Instant now) {
-        int currentInterval = progress.getIntervalDays() == null ? 1 : progress.getIntervalDays();
-        switch (rating) {
-            case AGAIN -> {
-                progress.setState(DomainTypes.AnkiState.RELEARNING);
-                progress.setLapses(progress.getLapses() + 1);
-                progress.setEaseFactor(maxEase(progress.getEaseFactor().subtract(AGAIN_PENALTY)));
-                progress.setIntervalMinutes(1);
-                progress.setIntervalDays(null);
-                progress.setRepetitions(0);
-                progress.setDueAt(now.plus(1, ChronoUnit.MINUTES));
-            }
-            case HARD -> scheduleDays(progress, Math.max(1, Math.round(currentInterval * 1.2f)),
-                    maxEase(progress.getEaseFactor().subtract(HARD_PENALTY)), now);
-            case GOOD -> scheduleDays(progress,
-                    Math.max(1, Math.round(currentInterval * progress.getEaseFactor().floatValue())),
-                    progress.getEaseFactor(), now);
-            case EASY -> {
-                BigDecimal ease = maxEase(progress.getEaseFactor().add(EASY_BONUS));
-                scheduleDays(progress, Math.max(1, Math.round(currentInterval * ease.floatValue() * 1.3f)), ease, now);
-            }
-        }
-    }
-
-    private void graduate(AnkiCardProgress progress, int days, Instant now) {
-        progress.setState(DomainTypes.AnkiState.REVIEW);
-        progress.setIntervalDays(days);
-        progress.setIntervalMinutes(null);
-        progress.setRepetitions(1);
-        progress.setDueAt(now.plus(days, ChronoUnit.DAYS));
-    }
-
-    private void scheduleDays(AnkiCardProgress progress, int days, BigDecimal ease, Instant now) {
-        progress.setEaseFactor(ease);
-        progress.setIntervalDays(days);
+        progress.setState(toDomainState(result.getState()));
+        progress.setFsrsStep(result.getStep());
+        progress.setFsrsStability(result.getStability());
+        progress.setFsrsDifficulty(result.getDifficulty());
+        progress.setFsrsAlgorithm("fsrs-6");
+        progress.setDueAt(result.getDue());
+        progress.setFirstReviewedAt(progress.getFirstReviewedAt() == null ? now : progress.getFirstReviewedAt());
+        progress.setLastReviewedAt(result.getLastReview() == null ? now : result.getLastReview());
+        progress.setLastRating(rating);
         progress.setRepetitions(progress.getRepetitions() + 1);
-        progress.setDueAt(now.plus(days, ChronoUnit.DAYS));
+        if (rating == DomainTypes.AnkiRating.AGAIN && previousState == DomainTypes.AnkiState.REVIEW)
+            progress.setLapses(progress.getLapses() + 1);
+
+        int elapsedDays = previousReview == null ? 0 : Math.max(0, (int) ChronoUnit.DAYS.between(previousReview, now));
+        int scheduledDays = Math.max(0, (int) ChronoUnit.DAYS.between(now, result.getDue()));
+        progress.setFsrsElapsedDays(elapsedDays);
+        progress.setFsrsScheduledDays(scheduledDays);
+        Duration interval = Duration.between(now, result.getDue());
+        if (interval.compareTo(Duration.ofDays(1)) < 0) {
+            progress.setIntervalMinutes(Math.max(1, (int) Math.ceil(interval.toSeconds() / 60.0)));
+            progress.setIntervalDays(null);
+        } else {
+            progress.setIntervalMinutes(null);
+            progress.setIntervalDays(Math.max(1, scheduledDays));
+        }
+        progress.setEaseFactor(BigDecimal.valueOf(Math.max(1.3,
+                3.0 - (result.getDifficulty() == null ? 5.0 : result.getDifficulty()) * 0.1)));
     }
 
-    private BigDecimal maxEase(BigDecimal value) { return value.max(MIN_EASE); }
+    private Card toFsrsCard(AnkiCardProgress progress, Instant now) {
+        int cardId = progress.getCard() == null ? 1 : progress.getCard().getId().hashCode();
+        Card.Builder builder = Card.builder().cardId(cardId).due(progress.getDueAt() == null ? now : progress.getDueAt());
+        if (progress.getState() == DomainTypes.AnkiState.NEW) return builder.build();
+
+        State state = switch (progress.getState()) {
+            case REVIEW -> State.REVIEW;
+            case RELEARNING -> State.RELEARNING;
+            default -> State.LEARNING;
+        };
+        builder.state(state).lastReview(progress.getLastReviewedAt());
+        if (state != State.REVIEW) builder.step(progress.getFsrsStep() == null ? 0 : progress.getFsrsStep());
+        else if (progress.getFsrsStep() != null) builder.step(progress.getFsrsStep());
+        if (progress.getFsrsStability() != null) builder.stability(progress.getFsrsStability());
+        else if (state == State.REVIEW) builder.stability(Math.max(0.1, progress.getIntervalDays() == null ? 1 : progress.getIntervalDays()));
+        if (progress.getFsrsDifficulty() != null) builder.difficulty(progress.getFsrsDifficulty());
+        else if (state == State.REVIEW) builder.difficulty(5.0);
+        return builder.build();
+    }
+
+    private DomainTypes.AnkiState toDomainState(State state) {
+        return switch (state) {
+            case LEARNING -> DomainTypes.AnkiState.LEARNING;
+            case REVIEW -> DomainTypes.AnkiState.REVIEW;
+            case RELEARNING -> DomainTypes.AnkiState.RELEARNING;
+        };
+    }
 }

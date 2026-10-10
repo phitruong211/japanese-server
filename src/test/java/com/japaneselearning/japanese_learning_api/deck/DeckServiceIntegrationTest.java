@@ -27,6 +27,8 @@ class DeckServiceIntegrationTest {
     @Autowired com.japaneselearning.japanese_learning_api.anki.AnkiService anki;
     @Autowired UserRepository users;
     @Autowired DeckRepository decks;
+    @Autowired AnkiCardProgressRepository progressRepository;
+    @Autowired AnkiReviewLogRepository reviewLogs;
     @Autowired EntityManager em;
     @Autowired PlatformTransactionManager transactions;
     @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
@@ -43,6 +45,8 @@ class DeckServiceIntegrationTest {
             progress.setCard(em.getReference(Card.class, first.cards().get(0).id()));
             progress.setState(DomainTypes.AnkiState.REVIEW);
             progress.setDueAt(Instant.now().minusSeconds(60));
+            progress.setLastReviewedAt(Instant.now());
+            progress.setRepetitions(1);
             em.persist(progress);
         });
         var statistics = entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
@@ -54,6 +58,11 @@ class DeckServiceIntegrationTest {
         var result = listed.content().stream().filter(deck -> deck.id().equals(first.deck().id())).findFirst().orElseThrow();
         assertThat(result.newCount()).isEqualTo(1);
         assertThat(result.dueCount()).isEqualTo(1);
+        assertThat(result.learnedCount()).isEqualTo(1);
+        assertThat(result.studiedTodayCount()).isEqualTo(1);
+        assertThat(result.newStartedTodayCount()).isEqualTo(1);
+        assertThat(result.unresolvedCount()).isZero();
+        assertThat(result.remainingTodayCount()).isEqualTo(2);
         assertThat(listed.content().stream().filter(deck -> deck.name().equals("Empty")).findFirst().orElseThrow().newCount()).isZero();
         statistics.clear();
         var withProgress = service.cardPage(owner, first.deck().id(), 0, 50, "", "", "");
@@ -140,5 +149,19 @@ class DeckServiceIntegrationTest {
         service.delete(owner, deck.deck().id());
         assertThatThrownBy(() -> anki.queue(owner, deck.deck().id(), 1)).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> anki.review(owner, deck.cards().getFirst().id(), new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(DomainTypes.AnkiRating.GOOD, 100))).isInstanceOf(ApiException.class);
+    }
+
+    @Test void repeatedClientReviewIdIsAppliedOnlyOnce() {
+        UUID owner = user();
+        var deck = service.create(owner, request("Idempotent", List.of(card("one"))));
+        UUID cardId = deck.cards().getFirst().id();
+        UUID operation = UUID.randomUUID();
+        var request = new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(
+                operation, DomainTypes.AnkiRating.AGAIN, 900);
+        var first = anki.review(owner, cardId, request);
+        var retry = anki.review(owner, cardId, request);
+        assertThat(retry.progress()).isEqualTo(first.progress());
+        assertThat(progressRepository.findByUserIdAndCardId(owner, cardId).orElseThrow().getRepetitions()).isEqualTo(1);
+        assertThat(reviewLogs.count()).isEqualTo(1);
     }
 }

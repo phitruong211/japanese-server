@@ -26,6 +26,14 @@ public class AnkiCardProgress {
     @Column(nullable = false) private int repetitions;
     @Column(nullable = false) private int lapses;
     @Column(name = "last_reviewed_at") private Instant lastReviewedAt;
+    @Column(name = "first_reviewed_at") private Instant firstReviewedAt;
+    @Column(name = "fsrs_stability") private Double fsrsStability;
+    @Column(name = "fsrs_difficulty") private Double fsrsDifficulty;
+    @Column(name = "fsrs_elapsed_days") private Integer fsrsElapsedDays;
+    @Column(name = "fsrs_scheduled_days") private Integer fsrsScheduledDays;
+    @Column(name = "fsrs_step") private Integer fsrsStep;
+    @Column(name = "fsrs_algorithm", length = 20) private String fsrsAlgorithm;
+    @Enumerated(EnumType.STRING) @Column(name = "last_rating") private DomainTypes.AnkiRating lastRating;
     @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @UpdateTimestamp @Column(name = "updated_at", nullable = false) private Instant updatedAt;
     @Version private long version;

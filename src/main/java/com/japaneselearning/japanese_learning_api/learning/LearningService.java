@@ -64,8 +64,8 @@ public class LearningService {
  private static <T> Map<String,T> index(List<T>items,Function<T,String>key){Map<String,T>m=new LinkedHashMap<>();for(T item:items)m.put(key.apply(item),item);return m;}
  private static void validate(List<Bookmark>b,List<SrsCard>s,List<StudyDay>d){
   if(index(b,x->x.itemType()+":"+x.itemId()).size()!=b.size()||index(s,x->x.deckType()+":"+x.cardId()).size()!=s.size()||index(d,StudyDay::date).size()!=d.size())throw new ApiException(HttpStatus.BAD_REQUEST,"Dữ liệu có khóa trùng");
-  try{for(Bookmark x:b)Instant.parse(x.createdAt());for(SrsCard x:s){Instant.parse(x.dueDate());if(x.lastReviewedAt()!=null)Instant.parse(x.lastReviewedAt());}for(StudyDay x:d)LocalDate.parse(x.date());}
-  catch(Exception e){throw new ApiException(HttpStatus.BAD_REQUEST,"Ngày trong dữ liệu học không hợp lệ");}
+  try{for(Bookmark x:b)Instant.parse(x.createdAt());for(SrsCard x:s){Instant.parse(x.dueDate());if(x.lastReviewedAt()!=null)Instant.parse(x.lastReviewedAt());if(x.firstReviewedAt()!=null)Instant.parse(x.firstReviewedAt());if("fsrs-6".equals(x.algorithm())&&(x.stability()==null||x.difficulty()==null||x.elapsedDays()==null||x.scheduledDays()==null||x.learningSteps()==null))throw new IllegalArgumentException("Thiếu trạng thái FSRS");}for(StudyDay x:d)LocalDate.parse(x.date());}
+  catch(Exception e){throw new ApiException(HttpStatus.BAD_REQUEST,"Dữ liệu lịch ôn không hợp lệ");}
  }
  private static String hash(String payload){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(payload.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}
 }

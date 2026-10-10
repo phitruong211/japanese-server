@@ -24,4 +24,7 @@ public interface AnkiCardProgressRepository extends JpaRepository<AnkiCardProgre
         order by p.dueAt, p.id
         """)
     List<AnkiCardProgress> findDue(@Param("userId") UUID userId, @Param("deckId") UUID deckId, @Param("now") Instant now, org.springframework.data.domain.Pageable pageable);
+
+    @Query("select count(p) from AnkiCardProgress p where p.user.id=:userId and p.card.deck.id=:deckId and p.createdAt>=:dayStart")
+    long countNewStartedToday(@Param("userId") UUID userId, @Param("deckId") UUID deckId, @Param("dayStart") Instant dayStart);
 }

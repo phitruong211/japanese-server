@@ -8,12 +8,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 import static com.japaneselearning.japanese_learning_api.learning.LearningDtos.*;
-@SpringBootTest @Transactional
+@SpringBootTest(properties = {
+ "spring.config.import=",
+ "spring.datasource.url=jdbc:h2:mem:learning_tests;MODE=MySQL;DB_CLOSE_DELAY=-1",
+ "spring.datasource.driver-class-name=org.h2.Driver",
+ "spring.datasource.username=sa", "spring.datasource.password=",
+ "spring.jpa.hibernate.ddl-auto=create-drop", "spring.flyway.enabled=false"
+}) @Transactional
 class LearningServiceIntegrationTest {
  @Autowired LearningService service; @Autowired AuthService auth;
  UUID owner(){return auth.register(new AuthDtos.RegisterRequest("learn-"+UUID.randomUUID()+"@example.com","TestPassword123!","Learning","test")).user().id();}
  Bookmark bookmark(){return new Bookmark("vocab-n3-1","vocabulary","2026-09-26T00:00:00Z",null);}
  SrsCard card(int reps){return new SrsCard("vocab-n3-1","vocabulary","review",2.5,1440.0,null,"2026-09-27T00:00:00Z",reps,0,null);}
+ SrsCard fsrsCard(){return new SrsCard("kanji-n4-1","kanji","review",2.5,null,3.0,"2026-10-13T00:00:00Z",4,1,"2026-10-10T00:00:00Z","fsrs-6",3.25,5.1,1,3,0,"2026-10-01T00:00:00Z","good");}
  StudyDay day(int count){return new StudyDay("2026-09-26",count,count,0,count,80,2);}
  @Test void migrationIsIdempotentAndAccountProgressWins(){
   UUID user=owner();service.put(user,new Update(0,List.of(),List.of(card(8)),List.of(day(2))));
@@ -37,5 +44,11 @@ class LearningServiceIntegrationTest {
   assertThatThrownBy(()->service.put(user,new Update(0,List.of(bookmark(),bookmark()),List.of(),List.of()))).isInstanceOf(ApiException.class);
   assertThatThrownBy(()->service.put(user,new Update(0,List.of(),List.of(),List.of(new StudyDay("2026-02-30",1,1,0,1,80,2))))).isInstanceOf(ApiException.class);
   assertThat(service.get(user).revision()).isZero();
+ }
+ @Test void canonicalFsrsStateRoundTripsWithoutLosingSchedulerFields(){
+  UUID user=owner();
+  Snapshot saved=service.put(user,new Update(0,List.of(),List.of(fsrsCard()),List.of()));
+  assertThat(saved.srsCards()).containsExactly(fsrsCard());
+  assertThat(service.get(user).srsCards()).containsExactly(fsrsCard());
  }
 }
