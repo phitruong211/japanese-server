@@ -44,6 +44,7 @@ public class UserSettingsController {
         if (request.autoPlayAudio() != null) settings.setAutoPlayAudio(request.autoPlayAudio());
         if (request.dailyGoal() != null) settings.setDailyGoal(request.dailyGoal());
         if (request.ankiSessionMinutes() != null) settings.setAnkiSessionMinutes(request.ankiSessionMinutes());
+        if (request.srsDailyNewLimit() != null) settings.setSrsDailyNewLimit(request.srsDailyNewLimit());
         settings.setSrsAgainMinutes(nextAgain);
         settings.setSrsGoodMinutes(nextGood);
         settings.setSrsDesiredRetention(nextRetention.setScale(3));
@@ -58,7 +59,7 @@ public class UserSettingsController {
     private UserSettingsDtos.Response response(UserSettings s) {
         return new UserSettingsDtos.Response(s.getTheme(), s.getFontSize(), s.isShowFurigana(), s.isAutoPlayAudio(),
                 s.getDailyGoal(), s.getAnkiSessionMinutes(), s.isReducedMotion(),
-                s.isShowFuriganaFront(), s.isShowFuriganaBack(), s.getSrsAgainMinutes(),
+                s.isShowFuriganaFront(), s.isShowFuriganaBack(), s.getSrsDailyNewLimit(), s.getSrsAgainMinutes(),
                 s.getSrsGoodMinutes(), s.getSrsDesiredRetention());
     }
 }

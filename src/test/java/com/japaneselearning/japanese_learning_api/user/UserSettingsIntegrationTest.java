@@ -29,25 +29,28 @@ class UserSettingsIntegrationTest {
         var principal = new TestingAuthenticationToken(account.user().id().toString(), "", "ROLE_USER");
         var defaults = controller.get(principal);
         assertThat(defaults.srsAgainMinutes()).isEqualTo(1);
+        assertThat(defaults.srsDailyNewLimit()).isEqualTo(20);
         assertThat(defaults.srsGoodMinutes()).isEqualTo(10);
         assertThat(defaults.srsDesiredRetention()).isEqualByComparingTo("0.900");
 
-        var changed = controller.update(principal, request(2, 15, "0.930"));
+        var changed = controller.update(principal, request(5000, 2, 15, "0.930"));
+        assertThat(changed.srsDailyNewLimit()).isEqualTo(5000);
         assertThat(changed.srsAgainMinutes()).isEqualTo(2);
         assertThat(changed.srsGoodMinutes()).isEqualTo(15);
         assertThat(changed.srsDesiredRetention()).isEqualByComparingTo("0.930");
     }
 
     @Test void invalidRangesAndOrderingAreRejected() {
-        assertThat(validator.validate(request(0, 10, "0.900"))).isNotEmpty();
+        assertThat(validator.validate(request(20, 0, 10, "0.900"))).isNotEmpty();
+        assertThat(validator.validate(request(-1, 1, 10, "0.900"))).isNotEmpty();
         var account = auth.register(new AuthDtos.RegisterRequest("invalid-settings@example.com", "TestPassword123!", "Settings", "test"));
         var principal = new TestingAuthenticationToken(account.user().id().toString(), "", "ROLE_USER");
-        assertThatThrownBy(() -> controller.update(principal, request(10, 10, "0.900"))).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> controller.update(principal, request(1, 10, "0.990"))).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.update(principal, request(20, 10, 10, "0.900"))).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> controller.update(principal, request(20, 1, 10, "0.990"))).isInstanceOf(ApiException.class);
     }
 
-    private UserSettingsDtos.UpdateRequest request(int again, int good, String retention) {
+    private UserSettingsDtos.UpdateRequest request(int dailyNewLimit, int again, int good, String retention) {
         return new UserSettingsDtos.UpdateRequest(null, null, null, null, null, null, null, null,
-                again, good, new BigDecimal(retention), null);
+                dailyNewLimit, again, good, new BigDecimal(retention), null);
     }
 }

@@ -64,7 +64,9 @@ public class AnkiService {
             try { zone = java.time.ZoneId.of(owner.getTimezone()); }
             catch (RuntimeException ignored) { zone = java.time.ZoneOffset.UTC; }
             Instant dayStart = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant();
-            int allowance = deckId == null ? 20 : Math.max(0, 20 - (int) progressRepository.countNewStartedToday(userId, deckId, dayStart));
+            int dailyNewLimit = settingsRepository.findById(userId).map(settings -> settings.getSrsDailyNewLimit()).orElse(20);
+            long startedToday = progressRepository.countNewStartedToday(userId, deckId, dayStart);
+            int allowance = (int) Math.min(Integer.MAX_VALUE, Math.max(0L, (long) dailyNewLimit - startedToday));
             int newLimit = Math.min(limit - result.size(), allowance);
             if (newLimit > 0) cards.findNewForAnki(userId, deckId, org.springframework.data.domain.PageRequest.of(0, newLimit)).stream()
                     .forEach(card -> result.add(queueCard(card, null)));

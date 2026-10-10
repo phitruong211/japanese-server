@@ -24,6 +24,7 @@ public class UserSettings {
     @Column(name = "auto_play_audio", nullable = false) private boolean autoPlayAudio;
     @Column(name = "daily_goal", nullable = false) private int dailyGoal = 20;
     @Column(name = "anki_session_minutes", nullable = false) private int ankiSessionMinutes;
+    @Column(name = "srs_daily_new_limit", nullable = false) private int srsDailyNewLimit = 20;
     @Column(name = "srs_again_minutes", nullable = false) private int srsAgainMinutes = 1;
     @Column(name = "srs_good_minutes", nullable = false) private int srsGoodMinutes = 10;
     @Column(name = "srs_desired_retention", nullable = false, precision = 4, scale = 3)

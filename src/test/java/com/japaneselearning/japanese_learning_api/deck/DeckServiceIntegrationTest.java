@@ -29,6 +29,7 @@ class DeckServiceIntegrationTest {
     @Autowired DeckRepository decks;
     @Autowired AnkiCardProgressRepository progressRepository;
     @Autowired AnkiReviewLogRepository reviewLogs;
+    @Autowired UserSettingsRepository settings;
     @Autowired EntityManager em;
     @Autowired PlatformTransactionManager transactions;
     @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
@@ -53,7 +54,7 @@ class DeckServiceIntegrationTest {
         statistics.clear();
         var listed = service.listPage(owner, 0, 20, "name,asc");
         System.out.println("Deck list SQL statements: " + statistics.getPrepareStatementCount());
-        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(3);
+        assertThat(statistics.getPrepareStatementCount()).isLessThanOrEqualTo(4);
         assertThat(listed.content()).hasSize(3);
         var result = listed.content().stream().filter(deck -> deck.id().equals(first.deck().id())).findFirst().orElseThrow();
         assertThat(result.newCount()).isEqualTo(1);
@@ -149,6 +150,18 @@ class DeckServiceIntegrationTest {
         service.delete(owner, deck.deck().id());
         assertThatThrownBy(() -> anki.queue(owner, deck.deck().id(), 1)).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> anki.review(owner, deck.cards().getFirst().id(), new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(DomainTypes.AnkiRating.GOOD, 100))).isInstanceOf(ApiException.class);
+    }
+
+    @Test void customDailyNewLimitControlsQueueAndDeckMetrics() {
+        UUID owner = user();
+        var deck = service.create(owner, request("No new cards", List.of(card("one"), card("two"))));
+        var userSettings = new UserSettings();
+        userSettings.setUser(users.findById(owner).orElseThrow());
+        userSettings.setSrsDailyNewLimit(0);
+        settings.saveAndFlush(userSettings);
+
+        assertThat(anki.queue(owner, deck.deck().id(), 200)).isEmpty();
+        assertThat(service.metadata(owner, deck.deck().id()).remainingTodayCount()).isZero();
     }
 
     @Test void repeatedClientReviewIdIsAppliedOnlyOnce() {
