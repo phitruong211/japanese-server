@@ -19,6 +19,7 @@ public final class UserSettingsDtos {
             Boolean autoPlayAudio,
             @Min(1) @Max(1000) Integer dailyGoal,
             @Min(0) @Max(180) Integer ankiSessionMinutes,
+            @Min(0) Integer srsDailyNewLimit,
             @Min(1) @Max(30) Integer srsAgainMinutes,
             @Min(2) @Max(720) Integer srsGoodMinutes,
             @DecimalMin("0.900") @DecimalMax("0.950") BigDecimal srsDesiredRetention,
@@ -27,5 +28,6 @@ public final class UserSettingsDtos {
     public record Response(String theme, String fontSize, boolean showFurigana, boolean autoPlayAudio,
                            int dailyGoal, int ankiSessionMinutes, boolean reducedMotion,
                            boolean showFuriganaFront, boolean showFuriganaBack,
+                           int srsDailyNewLimit,
                            int srsAgainMinutes, int srsGoodMinutes, BigDecimal srsDesiredRetention) {}
 }

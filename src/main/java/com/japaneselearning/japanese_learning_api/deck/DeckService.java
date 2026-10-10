@@ -8,6 +8,7 @@ import com.japaneselearning.japanese_learning_api.model.User;
 import com.japaneselearning.japanese_learning_api.repository.CardRepository;
 import com.japaneselearning.japanese_learning_api.repository.DeckRepository;
 import com.japaneselearning.japanese_learning_api.repository.UserRepository;
+import com.japaneselearning.japanese_learning_api.repository.UserSettingsRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,21 +22,24 @@ public class DeckService {
     private final DeckRepository decks;
     private final CardRepository cards;
     private final UserRepository users;
+    private final UserSettingsRepository settings;
     @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager em;
     private final tools.jackson.databind.ObjectMapper mapper;
 
-    public DeckService(DeckRepository decks, CardRepository cards, UserRepository users, tools.jackson.databind.ObjectMapper mapper) {
+    public DeckService(DeckRepository decks, CardRepository cards, UserRepository users, UserSettingsRepository settings, tools.jackson.databind.ObjectMapper mapper) {
         this.mapper = mapper;
         this.decks = decks;
         this.cards = cards;
         this.users = users;
+        this.settings = settings;
     }
 
     @Transactional(readOnly = true)
     public List<DeckDtos.DeckSummary> list(UUID userId) {
         var owned = decks.findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscUpdatedAtDesc(userId);
         var counts = deckCounts(owned, userId);
-        return owned.stream().map(deck -> summary(deck, counts.get(deck.getId()))).toList();
+        int dailyNewLimit = dailyNewLimit(userId);
+        return owned.stream().map(deck -> summary(deck, counts.get(deck.getId()), dailyNewLimit)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -93,7 +97,8 @@ public class DeckService {
         Map<UUID, Deck> byId = new HashMap<>();
         owned.forEach(deck -> byId.put(deck.getId(), deck));
         for (int i = 0; i < request.deckIds().size(); i++) byId.get(request.deckIds().get(i)).setPosition(i);
-        return request.deckIds().stream().map(id -> summary(byId.get(id))).toList();
+        int dailyNewLimit = dailyNewLimit(userId);
+        return request.deckIds().stream().map(id -> summary(byId.get(id), dailyNewLimit)).toList();
     }
 
     @Transactional
@@ -206,7 +211,11 @@ public class DeckService {
     }
 
     private DeckDtos.DeckSummary summary(Deck deck) {
-        return summary(deck, deckCounts(List.of(deck), deck.getOwner().getId()).get(deck.getId()));
+        return summary(deck, dailyNewLimit(deck.getOwner().getId()));
+    }
+
+    private DeckDtos.DeckSummary summary(Deck deck, int dailyNewLimit) {
+        return summary(deck, deckCounts(List.of(deck), deck.getOwner().getId()).get(deck.getId()), dailyNewLimit);
     }
 
     private Map<UUID, CardRepository.DeckCounts> deckCounts(List<Deck> owned, UUID userId) {
@@ -225,19 +234,24 @@ public class DeckService {
         }
     }
 
-    private DeckDtos.DeckSummary summary(Deck deck, CardRepository.DeckCounts counts) {
+    private int dailyNewLimit(UUID userId) {
+        return settings.findById(userId).map(userSettings -> userSettings.getSrsDailyNewLimit()).orElse(20);
+    }
+
+    private DeckDtos.DeckSummary summary(Deck deck, CardRepository.DeckCounts counts, int dailyNewLimit) {
         return summary(deck,
                 counts == null ? 0 : counts.getNewCount(),
                 counts == null ? 0 : counts.getDueCount(),
                 counts == null ? 0 : counts.getLearnedCount(),
                 counts == null ? 0 : counts.getStudiedTodayCount(),
                 counts == null ? 0 : counts.getNewStartedTodayCount(),
-                counts == null ? 0 : counts.getUnresolvedCount());
+                counts == null ? 0 : counts.getUnresolvedCount(), dailyNewLimit);
     }
 
     private DeckDtos.DeckSummary summary(Deck deck, long newCount, long dueCount, long learnedCount,
-                                         long studiedTodayCount, long newStartedTodayCount, long unresolvedCount) {
-        long remainingTodayCount = dueCount + Math.min(newCount, Math.max(0, 20 - newStartedTodayCount));
+                                         long studiedTodayCount, long newStartedTodayCount, long unresolvedCount,
+                                         int dailyNewLimit) {
+        long remainingTodayCount = dueCount + Math.min(newCount, Math.max(0L, (long) dailyNewLimit - newStartedTodayCount));
         return new DeckDtos.DeckSummary(deck.getId(), deck.getName(), deck.getDescription(), deck.getSourceType(),
                 deck.getSourceName(), deck.getImportFormat(), deck.getVisibility(), deck.getCardCount(),
                 deck.getPosition(), deck.getTemplateConfig(), deck.getCreatedAt(), deck.getUpdatedAt(),
@@ -260,7 +274,8 @@ public class DeckService {
         var direction = parts.length > 1 && parts[1].equalsIgnoreCase("asc") ? org.springframework.data.domain.Sort.Direction.ASC : org.springframework.data.domain.Sort.Direction.DESC;
         var result = decks.findAllByOwnerIdAndDeletedAtIsNull(userId, pageRequest(page, size, org.springframework.data.domain.Sort.by(direction, parts[0]).and(org.springframework.data.domain.Sort.by("id"))));
         var counts = deckCounts(result.getContent(), userId);
-        return DeckDtos.PageResponse.from(result.map(deck -> summary(deck, counts.get(deck.getId()))));
+        int dailyNewLimit = dailyNewLimit(userId);
+        return DeckDtos.PageResponse.from(result.map(deck -> summary(deck, counts.get(deck.getId()), dailyNewLimit)));
     }
 
     @Transactional(readOnly = true)
