@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class AnkiService {
@@ -20,15 +21,20 @@ public class AnkiService {
     private final DeckRepository decks;
     private final UserRepository users;
     private final AnkiScheduler scheduler;
+    private final UserSettingsRepository settingsRepository;
+    private final ObjectMapper objectMapper;
 
     public AnkiService(AnkiCardProgressRepository progressRepository, AnkiReviewLogRepository logs,
-                       CardRepository cards, DeckRepository decks, UserRepository users, AnkiScheduler scheduler) {
+                       CardRepository cards, DeckRepository decks, UserRepository users, AnkiScheduler scheduler,
+                       UserSettingsRepository settingsRepository, ObjectMapper objectMapper) {
         this.progressRepository = progressRepository;
         this.logs = logs;
         this.cards = cards;
         this.decks = decks;
         this.users = users;
         this.scheduler = scheduler;
+        this.settingsRepository = settingsRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -53,7 +59,14 @@ public class AnkiService {
         progressRepository.findDue(userId, deckId, Instant.now(), org.springframework.data.domain.PageRequest.of(0, limit)).stream()
                 .forEach(progress -> result.add(queueCard(progress.getCard(), response(progress))));
         if (result.size() < limit) {
-            cards.findNewForAnki(userId, deckId, org.springframework.data.domain.PageRequest.of(0, limit - result.size())).stream()
+            User owner = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
+            java.time.ZoneId zone;
+            try { zone = java.time.ZoneId.of(owner.getTimezone()); }
+            catch (RuntimeException ignored) { zone = java.time.ZoneOffset.UTC; }
+            Instant dayStart = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant();
+            int allowance = deckId == null ? 20 : Math.max(0, 20 - (int) progressRepository.countNewStartedToday(userId, deckId, dayStart));
+            int newLimit = Math.min(limit - result.size(), allowance);
+            if (newLimit > 0) cards.findNewForAnki(userId, deckId, org.springframework.data.domain.PageRequest.of(0, newLimit)).stream()
                     .forEach(card -> result.add(queueCard(card, null)));
         }
         return result;
@@ -61,16 +74,24 @@ public class AnkiService {
 
     @Transactional
     public AnkiDtos.ReviewResponse review(UUID userId, UUID cardId, AnkiDtos.ReviewRequest request) {
-        Card card = cards.findByIdAndDeckOwnerIdAndDeletedAtIsNull(cardId, userId)
-                .filter(cardValue -> cardValue.getDeck().getDeletedAt() == null)
+        UUID clientReviewId = request.clientReviewId() == null ? UUID.randomUUID() : request.clientReviewId();
+        // Serialize reviews for the same card before checking the idempotency key. This closes the
+        // race where two browser retries could otherwise calculate and persist the same review twice.
+        Card card = cards.findReviewCardForUpdate(cardId, userId)
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
+        var existing = logs.findByUserIdAndClientReviewId(userId, clientReviewId);
+        if (existing.isPresent()) {
+            var saved = objectMapper.readValue(existing.get().getResultProgress(), AnkiDtos.ProgressResponse.class);
+            return new AnkiDtos.ReviewResponse(existing.get().getCard().getId(), existing.get().getRating(), saved);
+        }
         User user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
         AnkiCardProgress progress = progressRepository.findByUserIdAndCardId(userId, cardId)
                 .orElseGet(() -> newProgress(user, card));
         DomainTypes.AnkiState previousState = progress.getState();
         Integer previousInterval = progress.getIntervalDays();
         Instant reviewedAt = Instant.now();
-        scheduler.apply(progress, request.rating(), reviewedAt);
+        UserSettings settings = settingsRepository.findById(userId).orElseGet(UserSettings::new);
+        scheduler.apply(progress, request.rating(), reviewedAt, request.responseTimeMs(), settings, true);
         progressRepository.save(progress);
 
         AnkiReviewLog log = new AnkiReviewLog();
@@ -84,8 +105,11 @@ public class AnkiService {
         log.setNewIntervalDays(progress.getIntervalDays());
         log.setResponseTimeMs(request.responseTimeMs());
         log.setReviewedAt(reviewedAt);
+        log.setClientReviewId(clientReviewId);
+        AnkiDtos.ProgressResponse result = response(progress);
+        log.setResultProgress(objectMapper.writeValueAsString(result));
         logs.save(log);
-        return new AnkiDtos.ReviewResponse(cardId, request.rating(), response(progress));
+        return new AnkiDtos.ReviewResponse(cardId, request.rating(), result);
     }
 
     private AnkiCardProgress newProgress(User user, Card card) {
@@ -107,6 +131,8 @@ public class AnkiService {
     private AnkiDtos.ProgressResponse response(AnkiCardProgress progress) {
         return new AnkiDtos.ProgressResponse(progress.getState(), progress.getEaseFactor(), progress.getIntervalMinutes(),
                 progress.getIntervalDays(), progress.getDueAt(), progress.getRepetitions(), progress.getLapses(),
-                progress.getLastReviewedAt());
+                progress.getLastReviewedAt(), progress.getFsrsAlgorithm(), progress.getFsrsStability(),
+                progress.getFsrsDifficulty(), progress.getFsrsElapsedDays(), progress.getFsrsScheduledDays(),
+                progress.getFsrsStep(), progress.getFirstReviewedAt(), progress.getLastRating());
     }
 }

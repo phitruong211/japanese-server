@@ -7,6 +7,7 @@ import lombok.Setter;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
@@ -23,6 +24,10 @@ public class UserSettings {
     @Column(name = "auto_play_audio", nullable = false) private boolean autoPlayAudio;
     @Column(name = "daily_goal", nullable = false) private int dailyGoal = 20;
     @Column(name = "anki_session_minutes", nullable = false) private int ankiSessionMinutes;
+    @Column(name = "srs_again_minutes", nullable = false) private int srsAgainMinutes = 1;
+    @Column(name = "srs_good_minutes", nullable = false) private int srsGoodMinutes = 10;
+    @Column(name = "srs_desired_retention", nullable = false, precision = 4, scale = 3)
+    private BigDecimal srsDesiredRetention = new BigDecimal("0.900");
     @Column(name = "reduced_motion", nullable = false) private boolean reducedMotion;
     @UpdateTimestamp @Column(name = "updated_at", nullable = false) private Instant updatedAt;
 }

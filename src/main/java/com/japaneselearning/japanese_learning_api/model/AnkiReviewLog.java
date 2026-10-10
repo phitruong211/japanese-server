@@ -22,4 +22,6 @@ public class AnkiReviewLog {
     @Column(name = "new_interval_days") private Integer newIntervalDays;
     @Column(name = "response_time_ms") private Integer responseTimeMs;
     @Column(name = "reviewed_at", nullable = false) private Instant reviewedAt;
+    @Column(name = "client_review_id") private UUID clientReviewId;
+    @Lob @Column(name = "result_progress") private String resultProgress;
 }

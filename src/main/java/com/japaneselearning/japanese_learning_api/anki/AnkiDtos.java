@@ -12,12 +12,19 @@ import java.util.UUID;
 public final class AnkiDtos {
     private AnkiDtos() {}
 
-    public record ReviewRequest(@NotNull DomainTypes.AnkiRating rating,
-                                @PositiveOrZero Integer responseTimeMs) {}
+    public record ReviewRequest(UUID clientReviewId, @NotNull DomainTypes.AnkiRating rating,
+                                @PositiveOrZero Integer responseTimeMs) {
+        public ReviewRequest(DomainTypes.AnkiRating rating, Integer responseTimeMs) {
+            this(null, rating, responseTimeMs);
+        }
+    }
 
     public record ProgressResponse(DomainTypes.AnkiState state, BigDecimal easeFactor,
                                    Integer intervalMinutes, Integer intervalDays, Instant dueAt,
-                                   int repetitions, int lapses, Instant lastReviewedAt) {}
+                                   int repetitions, int lapses, Instant lastReviewedAt,
+                                   String algorithm, Double stability, Double difficulty,
+                                   Integer elapsedDays, Integer scheduledDays, Integer learningSteps,
+                                   Instant firstReviewedAt, DomainTypes.AnkiRating lastRating) {}
 
     public record QueueCard(UUID cardId, UUID deckId, String deckName, String front, String back,
                             String reading, String notes, DomainTypes.CardKind kind,

@@ -231,16 +231,19 @@ public class DeckService {
                 counts == null ? 0 : counts.getDueCount(),
                 counts == null ? 0 : counts.getLearnedCount(),
                 counts == null ? 0 : counts.getStudiedTodayCount(),
-                counts == null ? 0 : counts.getNewStartedTodayCount());
+                counts == null ? 0 : counts.getNewStartedTodayCount(),
+                counts == null ? 0 : counts.getUnresolvedCount());
     }
 
     private DeckDtos.DeckSummary summary(Deck deck, long newCount, long dueCount, long learnedCount,
-                                         long studiedTodayCount, long newStartedTodayCount) {
+                                         long studiedTodayCount, long newStartedTodayCount, long unresolvedCount) {
+        long remainingTodayCount = dueCount + Math.min(newCount, Math.max(0, 20 - newStartedTodayCount));
         return new DeckDtos.DeckSummary(deck.getId(), deck.getName(), deck.getDescription(), deck.getSourceType(),
                 deck.getSourceName(), deck.getImportFormat(), deck.getVisibility(), deck.getCardCount(),
                 deck.getPosition(), deck.getTemplateConfig(), deck.getCreatedAt(), deck.getUpdatedAt(),
                 deck.getSource(), deck.getSourceRef(), deck.getSourceSheet(), deck.getTags() == null ? List.of() : deck.getTags(),
-                newCount, dueCount, learnedCount, studiedTodayCount, newStartedTodayCount);
+                newCount, dueCount, learnedCount, studiedTodayCount, newStartedTodayCount,
+                unresolvedCount, remainingTodayCount);
     }
 
     private DeckDtos.CardResponse cardResponse(Card card) {
