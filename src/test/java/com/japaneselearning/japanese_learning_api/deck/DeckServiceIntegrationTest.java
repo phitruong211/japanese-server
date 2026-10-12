@@ -34,6 +34,67 @@ class DeckServiceIntegrationTest {
     @Autowired PlatformTransactionManager transactions;
     @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
 
+    @Autowired DeckGroupService groupService;
+
+    @Test void groupsPreserveCardsAndProgressAndRejectForeignMoves() {
+        UUID owner = user(), stranger = user();
+        var created = service.create(owner, request("Grouped", List.of(card("one"), card("two"))));
+        var cardId = created.cards().get(0).id();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            var progress = new AnkiCardProgress(); progress.setId(UUID.randomUUID());
+            progress.setUser(em.getReference(User.class, owner)); progress.setCard(em.getReference(Card.class, cardId));
+            progress.setState(DomainTypes.AnkiState.REVIEW); progress.setDueAt(Instant.now().minusSeconds(60));
+            progress.setRepetitions(7); em.persist(progress);
+        });
+        groupService.create(owner, new DeckGroupService.NameRequest(" N3 ", null));
+        var group = groupService.list(owner).getFirst();
+        assertThat(group.name()).isEqualTo("N3");
+        assertThat(groupService.list(stranger)).isEmpty();
+        assertThatThrownBy(() -> groupService.move(stranger, created.deck().id(), new DeckGroupService.MoveRequest(group.id(), null, 0L))).isInstanceOf(ApiException.class);
+        var other = service.create(stranger, request("Other", List.of()));
+        assertThatThrownBy(() -> groupService.move(stranger, other.deck().id(), new DeckGroupService.MoveRequest(group.id(), null, other.deck().version()))).isInstanceOf(ApiException.class);
+        groupService.move(owner, created.deck().id(), new DeckGroupService.MoveRequest(group.id(), null, created.deck().version()));
+        assertThat(service.listPage(owner, 0, 20, "position,asc", null, true).totalElements()).isZero();
+        assertThat(service.listPage(owner, 0, 20, "position,asc", group.id(), true).content()).extracting(DeckDtos.DeckSummary::id).containsExactly(created.deck().id());
+        var stats = groupService.list(owner).getFirst();
+        assertThat(stats.cardCount()).isEqualTo(2); assertThat(stats.dueCount()).isEqualTo(1); assertThat(stats.deckCount()).isEqualTo(1);
+        assertThatThrownBy(() -> groupService.move(owner, created.deck().id(), new DeckGroupService.MoveRequest(null, null, created.deck().version()))).isInstanceOf(ApiException.class);
+        groupService.rename(owner, group.id(), new DeckGroupService.NameRequest("Bài học", stats.version()));
+        assertThatThrownBy(() -> groupService.dissolve(owner, group.id(), stats.version())).isInstanceOf(ApiException.class);
+        groupService.dissolve(owner, group.id(), groupService.list(owner).getFirst().version());
+        assertThat(service.metadata(owner, created.deck().id()).groupId()).isNull();
+        assertThat(service.get(owner, created.deck().id()).cards()).extracting(DeckDtos.CardResponse::id)
+            .containsExactlyElementsOf(created.cards().stream().map(DeckDtos.CardResponse::id).toList());
+        assertThat(service.cardPage(owner, created.deck().id(), 0, 20, "", "", "").content().getFirst().progress().repetitions()).isEqualTo(7);
+    }
+
+    @Test void groupPagingAndOrderWorkBeyondFirstPageAndSoftDeletedDecks() {
+        UUID owner = user(); groupService.create(owner, new DeckGroupService.NameRequest("Many", null));
+        var group = groupService.list(owner).getFirst();
+        var ids = new ArrayList<UUID>();
+        for (int i=0;i<23;i++) {
+            var deck = service.create(owner, request("Deck " + i, List.of())); ids.add(deck.deck().id());
+            groupService.move(owner, deck.deck().id(), new DeckGroupService.MoveRequest(group.id(), null, deck.deck().version()));
+        }
+        var page = service.listPage(owner, 1, 20, "position,asc", group.id(), true);
+        assertThat(page.totalElements()).isEqualTo(23); assertThat(page.content()).hasSize(3);
+        var last = service.metadata(owner, ids.getLast());
+        groupService.move(owner, last.id(), new DeckGroupService.MoveRequest(group.id(), ids.getFirst(), last.version()));
+        assertThat(service.listPage(owner, 0, 20, "position,asc", group.id(), true).content().getFirst().id()).isEqualTo(last.id());
+        var fresh = service.metadata(owner, last.id());
+        assertThatThrownBy(() -> groupService.move(owner, last.id(), new DeckGroupService.MoveRequest(null, ids.getFirst(), fresh.version()))).isInstanceOf(ApiException.class);
+        assertThat(service.metadata(owner, last.id()).groupId()).isEqualTo(group.id());
+        service.delete(owner, ids.getFirst());
+        groupService.dissolve(owner, group.id(), groupService.list(owner).getFirst().version());
+        assertThat(service.listPage(owner, 0, 20, "position,asc", null, true).totalElements()).isEqualTo(22);
+        groupService.create(owner, new DeckGroupService.NameRequest("A", null));
+        groupService.create(owner, new DeckGroupService.NameRequest("B", null));
+        var groups = groupService.list(owner);
+        groupService.reorder(owner, new DeckGroupService.OrderRequest(List.of(groups.get(1).id(), groups.get(0).id())));
+        assertThat(groupService.list(owner).getFirst().id()).isEqualTo(groups.get(1).id());
+        assertThatThrownBy(() -> groupService.reorder(owner, new DeckGroupService.OrderRequest(List.of(groups.getFirst().id(), groups.getFirst().id())))).isInstanceOf(ApiException.class);
+    }
+
     @Test void deckListCountsRemainCorrectWithoutQueriesPerDeck() {
         UUID owner = user();
         var first = service.create(owner, request("First", List.of(card("one"), card("two"))));

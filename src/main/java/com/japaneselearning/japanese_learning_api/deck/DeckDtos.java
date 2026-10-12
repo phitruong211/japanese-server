@@ -63,7 +63,7 @@ public final class DeckDtos {
                               Instant createdAt, Instant updatedAt, String source, String sourceRef, String sourceSheet,
                               List<String> tags, long newCount, long dueCount, long learnedCount,
                               long studiedTodayCount, long newStartedTodayCount,
-                              long unresolvedCount, long remainingTodayCount) {}
+                              long unresolvedCount, long remainingTodayCount, UUID groupId, long version) {}
     public record CardResponse(UUID id, UUID deckId, String front, String back, String reading, String notes,
                                DomainTypes.CardKind kind, int position, String externalId,
                                Map<String, Object> extraData, Instant createdAt, Instant updatedAt, List<String> tags,

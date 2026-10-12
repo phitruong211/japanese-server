@@ -39,5 +39,6 @@ public class Deck {
     @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "json") private java.util.List<String> tags = new java.util.ArrayList<>();
     @Column(name = "import_key", length = 128) private String importKey;
     @Column(name = "import_hash", length = 64) private String importHash;
+    @Column(name = "group_id") private UUID groupId;
     @Version private long version;
 }

@@ -1,0 +1,17 @@
+package com.japaneselearning.japanese_learning_api.model;
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import java.time.Instant;
+import java.util.UUID;
+@Entity @Table(name = "deck_groups") @Getter @Setter @NoArgsConstructor
+public class DeckGroup {
+    @Id private UUID id;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "owner_id") private User owner;
+    @Column(nullable = false, length = 200) private String name;
+    @Column(nullable = false) private int position;
+    @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
+    @UpdateTimestamp @Column(name = "updated_at", nullable = false) private Instant updatedAt;
+    @Version private long version;
+}

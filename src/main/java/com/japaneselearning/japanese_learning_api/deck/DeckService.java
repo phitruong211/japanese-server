@@ -92,6 +92,7 @@ public class DeckService {
 
     @Transactional
     public List<DeckDtos.DeckSummary> reorderDecks(UUID userId, DeckDtos.ReorderDecksRequest request) {
+        em.find(User.class, userId, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         List<Deck> owned = decks.findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscUpdatedAtDesc(userId);
         requireExactIds(request.deckIds(), owned.stream().map(Deck::getId).toList(), "Danh sách bộ thẻ không hợp lệ");
         Map<UUID, Deck> byId = new HashMap<>();
@@ -257,7 +258,7 @@ public class DeckService {
                 deck.getPosition(), deck.getTemplateConfig(), deck.getCreatedAt(), deck.getUpdatedAt(),
                 deck.getSource(), deck.getSourceRef(), deck.getSourceSheet(), deck.getTags() == null ? List.of() : deck.getTags(),
                 newCount, dueCount, learnedCount, studiedTodayCount, newStartedTodayCount,
-                unresolvedCount, remainingTodayCount);
+                unresolvedCount, remainingTodayCount, deck.getGroupId(), deck.getVersion());
     }
 
     private DeckDtos.CardResponse cardResponse(Card card) {
@@ -269,10 +270,17 @@ public class DeckService {
 
     @Transactional(readOnly = true)
     public DeckDtos.PageResponse<DeckDtos.DeckSummary> listPage(UUID userId, int page, int size, String sort) {
+        return listPage(userId, page, size, sort, null, false);
+    }
+
+    @Transactional(readOnly = true)
+    public DeckDtos.PageResponse<DeckDtos.DeckSummary> listPage(UUID userId, int page, int size, String sort, UUID groupId, boolean grouped) {
         String[] parts = sort.split(",");
         if (!Set.of("updatedAt", "createdAt", "name", "position").contains(parts[0])) throw bad("Trường sắp xếp không hợp lệ");
         var direction = parts.length > 1 && parts[1].equalsIgnoreCase("asc") ? org.springframework.data.domain.Sort.Direction.ASC : org.springframework.data.domain.Sort.Direction.DESC;
-        var result = decks.findAllByOwnerIdAndDeletedAtIsNull(userId, pageRequest(page, size, org.springframework.data.domain.Sort.by(direction, parts[0]).and(org.springframework.data.domain.Sort.by("id"))));
+        var pageable = pageRequest(page, size, org.springframework.data.domain.Sort.by(direction, parts[0]).and(org.springframework.data.domain.Sort.by("id")));
+        var result = grouped ? decks.findAllByOwnerIdAndGroupIdAndDeletedAtIsNull(userId, groupId, pageable)
+                : decks.findAllByOwnerIdAndDeletedAtIsNull(userId, pageable);
         var counts = deckCounts(result.getContent(), userId);
         int dailyNewLimit = dailyNewLimit(userId);
         return DeckDtos.PageResponse.from(result.map(deck -> summary(deck, counts.get(deck.getId()), dailyNewLimit)));

@@ -23,5 +23,5 @@ public class AnkiReviewLog {
     @Column(name = "response_time_ms") private Integer responseTimeMs;
     @Column(name = "reviewed_at", nullable = false) private Instant reviewedAt;
     @Column(name = "client_review_id") private UUID clientReviewId;
-    @Lob @Column(name = "result_progress") private String resultProgress;
+    @Lob @Column(name = "result_progress", columnDefinition = "longtext") private String resultProgress;
 }

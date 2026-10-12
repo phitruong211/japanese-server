@@ -17,8 +17,9 @@ public class DeckController {
 
     @GetMapping("/decks")
     Object list(Authentication auth, @RequestParam(required = false) Integer page,
-                @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "updatedAt,desc") String sort) {
-        return page == null ? service.list(CurrentUser.id(auth)) : service.listPage(CurrentUser.id(auth), page, size, sort);
+                @RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "updatedAt,desc") String sort,
+                @RequestParam(required = false) UUID groupId, @RequestParam(defaultValue = "false") boolean grouped) {
+        return page == null ? service.list(CurrentUser.id(auth)) : service.listPage(CurrentUser.id(auth), page, size, sort, groupId, grouped);
     }
 
     @GetMapping("/decks/{deckId}/metadata")

@@ -25,6 +25,12 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", request.getRequestURI(), fields));
     }
 
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ErrorResponse> concurrentUpdate(org.springframework.orm.ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT,
+                "Dữ liệu đã thay đổi. Hãy tải lại và thử lại.", request.getRequestURI(), null));
+    }
+
     private ErrorResponse error(HttpStatus status, String message, String path, Map<String, String> fields) {
         return new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message, path, fields);
     }
