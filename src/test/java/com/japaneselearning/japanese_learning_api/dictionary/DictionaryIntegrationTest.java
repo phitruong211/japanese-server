@@ -52,7 +52,10 @@ class DictionaryIntegrationTest {
         String cursor=dictionary.cursor("はし",null,1,first);
         assertThat(dictionary.search("はし",null,cursor,1).items().getFirst().word().key()).isNotEqualTo(first.items().getFirst().word().key());
         assertThatThrownBy(()->dictionary.search("猫",null,cursor,1)).isInstanceOf(ApiException.class);
-        mvc.perform(post("/api/v1/dictionary/words/jmdict:10001/cards").contentType("application/json").content("{}")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/dictionary/words/jmdict:10001/cards").contentType("application/json").content("{}")).andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(result -> assertThat(result.getResponse().getCharacterEncoding()).isEqualTo("UTF-8"))
+                .andExpect(result -> assertThat(new String(result.getResponse().getContentAsByteArray(), java.nio.charset.StandardCharsets.UTF_8)).contains("Bạn cần đăng nhập"));
     }
     @Test void ownerChecksIdempotencyAndEditedCardRemainIndependent() throws Exception {
         var u=user();var d=deck(u,DomainTypes.SourceType.IMPORT);String key=UUID.randomUUID().toString();var req=request(d,"猫");

@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json");
+                    response.setCharacterEncoding(java.nio.charset.StandardCharsets.UTF_8.name());
                     response.getWriter().write("{\"message\":\"Bạn cần đăng nhập\"}");
                 }))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
