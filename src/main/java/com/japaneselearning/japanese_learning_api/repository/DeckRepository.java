@@ -8,6 +8,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface DeckRepository extends JpaRepository<Deck, UUID> {
+    Optional<Deck> findByShareTokenAndDeletedAtIsNull(String shareToken);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select d from Deck d where d.owner.id = :ownerId and d.importKey = :key")
+    Optional<Deck> findSharedCopyForUpdate(@org.springframework.data.repository.query.Param("ownerId") UUID ownerId,
+                                         @org.springframework.data.repository.query.Param("key") String key);
     org.springframework.data.domain.Page<Deck> findAllByOwnerIdAndDeletedAtIsNull(UUID ownerId, org.springframework.data.domain.Pageable pageable);
     org.springframework.data.domain.Page<Deck> findAllByOwnerIdAndGroupIdAndDeletedAtIsNull(UUID ownerId, UUID groupId, org.springframework.data.domain.Pageable pageable);
     long countByOwnerIdAndDeletedAtIsNull(UUID ownerId);

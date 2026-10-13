@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface CardRepository extends JpaRepository<Card, UUID>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Card> {
+    List<Card> findAllByDeckIdAndDeletedAtIsNull(UUID deckId, org.springframework.data.domain.Pageable pageable);
     interface DeckCounts {
         UUID getDeckId();
         long getNewCount();

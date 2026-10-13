@@ -40,5 +40,6 @@ public class Deck {
     @Column(name = "import_key", length = 128) private String importKey;
     @Column(name = "import_hash", length = 64) private String importHash;
     @Column(name = "group_id") private UUID groupId;
+    @Column(name = "share_token", length = 36, unique = true) private String shareToken;
     @Version private long version;
 }
