@@ -15,7 +15,7 @@ import java.util.Map;
 public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorResponse> api(ApiException ex, HttpServletRequest request) {
-        return ResponseEntity.status(ex.status()).body(error(ex.status(), ex.getMessage(), request.getRequestURI(), null));
+        return ResponseEntity.status(ex.status()).body(new ErrorResponse(Instant.now(),ex.status().value(),ex.status().getReasonPhrase(),ex.getMessage(),request.getRequestURI(),null,ex.code()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -32,9 +32,9 @@ public class ApiExceptionHandler {
     }
 
     private ErrorResponse error(HttpStatus status, String message, String path, Map<String, String> fields) {
-        return new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message, path, fields);
+        return new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message, path, fields, null);
     }
 
     public record ErrorResponse(Instant timestamp, int status, String error, String message, String path,
-                                Map<String, String> fieldErrors) {}
+                                Map<String, String> fieldErrors, String code) {}
 }

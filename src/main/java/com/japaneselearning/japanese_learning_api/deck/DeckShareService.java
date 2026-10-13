@@ -15,7 +15,7 @@ import java.util.*;
 @Service
 public class DeckShareService {
     public record Link(String token) {}
-    public record PreviewCard(String front, String back, String reading, DomainTypes.CardKind kind) {}
+    public record PreviewCard(String front, String back, String reading, DomainTypes.CardKind kind, boolean dictionarySource) {}
     public record Preview(String name, String description, String author, int cardCount,
                           int previewCount, int page, int size, int totalPages, List<PreviewCard> cards) {}
     public record CopyResult(UUID deckId, boolean alreadySaved) {}
@@ -62,7 +62,7 @@ public class DeckShareService {
                 cards.findAllByDeckIdAndDeletedAtIsNull(deck.getId(), org.springframework.data.domain.PageRequest.of(
                         page, size, org.springframework.data.domain.Sort.by("position", "id"))).stream()
                         .limit(Math.min(size, remaining))
-                        .map(c -> new PreviewCard(c.getFront(), c.getBack(), c.getReading(), c.getKind())).toList();
+                        .map(c -> new PreviewCard(c.getFront(), c.getBack(), c.getReading(), c.getKind(), c.getDictionaryProvenance() != null)).toList();
         return new Preview(deck.getName(), deck.getDescription(), deck.getOwner().getDisplayName(), count,
                 previewCount, page, size, (previewCount + size - 1) / size, previewCards);
     }
@@ -95,6 +95,13 @@ public class DeckShareService {
                 "Bộ thẻ được chia sẻ", "SHARED", DomainTypes.Visibility.PRIVATE,
                 new HashMap<>(source.getTemplateConfig()), requests, "IMPORT", null, null, source.getTags()));
         em.find(Deck.class, result.deck().id()).setImportKey(key);
+        for (int i = 0; i < sourceCards.size(); i++) {
+            Card original = sourceCards.get(i);
+            Card copied = em.find(Card.class, result.cards().get(i).id());
+            copied.setDictionaryIdentity(original.getDictionaryIdentity());
+            copied.setDictionaryProvenance(original.getDictionaryProvenance());
+            if (original.getDictionaryProvenance() != null) copied.getExtraData().put("dictionaryRef", original.getDictionaryProvenance());
+        }
         return new CopyResult(result.deck().id(), false);
     }
 
@@ -107,6 +114,7 @@ public class DeckShareService {
 
     private Map<String, Object> sharedExtraData(Card card) {
         Map<String, Object> data = new HashMap<>(card.getExtraData());
+        if (card.getDictionaryProvenance() != null) data.put("dictionaryRef", card.getDictionaryProvenance());
         data.remove("sourceRef");
         data.remove("sourceSheet");
         return data;

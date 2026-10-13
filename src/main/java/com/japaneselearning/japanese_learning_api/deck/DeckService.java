@@ -51,6 +51,7 @@ public class DeckService {
 
     @Transactional
     public DeckDtos.DeckResponse create(UUID userId, DeckDtos.CreateDeckRequest request) {
+        lockOwner(userId);
         User owner = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
         Deck deck = new Deck();
         deck.setId(UUID.randomUUID());
@@ -82,6 +83,7 @@ public class DeckService {
 
     @Transactional
     public DeckDtos.DeckSummary update(UUID userId, UUID deckId, DeckDtos.UpdateDeckRequest request) {
+        lockOwner(userId);
         Deck deck = ownedDeck(userId, deckId);
         if (request.name() != null) deck.setName(required(request.name()));
         if (request.description() != null) deck.setDescription(blankToNull(request.description()));
@@ -103,12 +105,13 @@ public class DeckService {
     }
 
     @Transactional
-    public void delete(UUID userId, UUID deckId) { ownedDeck(userId, deckId).setDeletedAt(Instant.now()); }
+    public void delete(UUID userId, UUID deckId) { lockOwner(userId); ownedDeck(userId, deckId).setDeletedAt(Instant.now()); }
 
     @Transactional
     public DeckDtos.CardResponse addCard(UUID userId, UUID deckId, DeckDtos.CardRequest request) {
+        lockOwner(userId);
         Deck deck = ownedDeck(userId, deckId);
-        int position = request.position() == null ? deck.getCardCount() : request.position();
+        int position = request.position() == null ? em.createQuery("select coalesce(max(c.position),-1)+1 from Card c where c.deck.id=:deck and c.deletedAt is null", Integer.class).setParameter("deck",deckId).getSingleResult() : request.position();
         Card card = cards.save(newCard(deck, request, position));
         deck.setCardCount((int) cards.countByDeckIdAndDeletedAtIsNull(deckId));
         return cardResponse(card);
@@ -116,6 +119,7 @@ public class DeckService {
 
     @Transactional
     public DeckDtos.CardResponse updateCard(UUID userId, UUID cardId, DeckDtos.UpdateCardRequest request) {
+        lockOwner(userId);
         Card card = ownedCard(userId, cardId);
         if (request.front() != null) card.setFront(required(request.front()));
         if (request.back() != null) card.setBack(required(request.back()));
@@ -124,12 +128,15 @@ public class DeckService {
         if (request.kind() != null) card.setKind(request.kind());
         if (request.position() != null) card.setPosition(request.position());
         if (request.extraData() != null) card.setExtraData(new HashMap<>(request.extraData()));
+        if (card.getDictionaryProvenance() != null) card.getExtraData().put("dictionaryRef", card.getDictionaryProvenance());
+        else card.getExtraData().remove("dictionaryRef");
         if (request.tags() != null) card.getExtraData().put("tags", List.copyOf(request.tags()));
         return cardResponse(card);
     }
 
     @Transactional
     public List<DeckDtos.CardResponse> reorderCards(UUID userId, UUID deckId, DeckDtos.ReorderCardsRequest request) {
+        lockOwner(userId);
         ownedDeck(userId, deckId);
         List<Card> owned = cards.findAllByDeckIdAndDeletedAtIsNullOrderByPosition(deckId);
         requireExactIds(request.cardIds(), owned.stream().map(Card::getId).toList(), "Danh sách thẻ không hợp lệ");
@@ -141,10 +148,19 @@ public class DeckService {
 
     @Transactional
     public List<DeckDtos.CardResponse> moveCards(UUID userId, DeckDtos.MoveCardsRequest request) {
+        lockOwner(userId);
         Deck target = ownedDeck(userId, request.targetDeckId());
         if (new HashSet<>(request.cardIds()).size() != request.cardIds().size())
             throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "Danh sách thẻ bị trùng");
         List<Card> moving = request.cardIds().stream().map(id -> ownedCard(userId, id)).toList();
+        Set<String> dictionaryKeys = new HashSet<>();
+        Set<UUID> movingDictionaryIds = new HashSet<>(request.cardIds());
+        for (Card card : moving) if (card.getDictionaryIdentity() != null) {
+            if (!dictionaryKeys.add(card.getDictionaryIdentity())) throw ApiException.conflict("Các thẻ được chọn có cùng mục từ từ điển");
+            var duplicates = em.createQuery("select c from Card c where c.deck.id=:deck and c.dictionaryIdentity=:key and c.deletedAt is null", Card.class)
+                .setParameter("deck",target.getId()).setParameter("key",card.getDictionaryIdentity()).setLockMode(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE).getResultList();
+            if (duplicates.stream().anyMatch(c -> !movingDictionaryIds.contains(c.getId()))) throw ApiException.conflict("Bộ đích đã có từ này với cùng nghĩa");
+        }
         Set<Deck> sources = new HashSet<>();
         moving.forEach(card -> sources.add(card.getDeck()));
         List<Card> targetCards = new ArrayList<>(cards.findAllByDeckIdAndDeletedAtIsNullOrderByPosition(target.getId()));
@@ -168,6 +184,7 @@ public class DeckService {
 
     @Transactional
     public void deleteCard(UUID userId, UUID cardId) {
+        lockOwner(userId);
         Card card = ownedCard(userId, cardId);
         card.setDeletedAt(Instant.now());
         Deck deck = card.getDeck();
@@ -175,11 +192,28 @@ public class DeckService {
     }
 
     private Deck ownedDeck(UUID userId, UUID deckId) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            Deck deck = em.find(Deck.class, deckId, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if (deck == null || !deck.getOwner().getId().equals(userId) || deck.getDeletedAt() != null) throw ApiException.notFound("Không tìm thấy bộ thẻ");
+            return deck;
+        }
         return decks.findByIdAndOwnerIdAndDeletedAtIsNull(deckId, userId)
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy bộ thẻ"));
     }
 
+    // Serialize mutations for one owner, including dictionary adds and multi-deck moves.
+    // Refresh the owner transaction's mutable deck/card state with locking reads under MySQL RR.
+    private void lockOwner(UUID userId) {
+        if (em.find(User.class, userId, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) == null)
+            throw ApiException.notFound("Không tìm thấy người dùng");
+    }
+
     private Card ownedCard(UUID userId, UUID cardId) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            Card card = em.find(Card.class, cardId, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if (card == null || !card.getDeck().getOwner().getId().equals(userId) || card.getDeletedAt() != null || card.getDeck().getDeletedAt() != null) throw ApiException.notFound("Không tìm thấy thẻ");
+            return card;
+        }
         return cards.findByIdAndDeckOwnerIdAndDeletedAtIsNull(cardId, userId).filter(c -> c.getDeck().getDeletedAt() == null)
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
     }
@@ -199,6 +233,7 @@ public class DeckService {
         card.setPosition(request.position() == null ? defaultPosition : request.position());
         card.setExternalId(blankToNull(request.externalId()));
         card.setExtraData(request.extraData() == null ? new HashMap<>() : new HashMap<>(request.extraData()));
+        card.getExtraData().remove("dictionaryRef");
         if (request.tags() != null) card.getExtraData().put("tags", List.copyOf(request.tags()));
         if (card.getExtraData().get("sourceRef") instanceof String ref) {
             if (ref.length() > 1000) throw bad("Tên nguồn quá dài");
@@ -262,9 +297,11 @@ public class DeckService {
     }
 
     private DeckDtos.CardResponse cardResponse(Card card) {
+        Map<String, Object> extra = new HashMap<>(card.getExtraData());
+        if (card.getDictionaryProvenance() != null) extra.put("dictionaryRef", card.getDictionaryProvenance());
         return new DeckDtos.CardResponse(card.getId(), card.getDeck().getId(), card.getFront(), card.getBack(),
                 card.getReading(), card.getNotes(), card.getKind(), card.getPosition(), card.getExternalId(),
-                card.getExtraData(), card.getCreatedAt(), card.getUpdatedAt(), cardTags(card), null,
+                extra, card.getCreatedAt(), card.getUpdatedAt(), cardTags(card), null,
                 card.getSource(), card.getSourceRef(), card.getSourceSheet());
     }
 

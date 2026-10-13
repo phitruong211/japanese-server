@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic test vocabulary; identifiers are fixtures, not JMdict production IDs. -->
+<!DOCTYPE JMdict [<!ENTITY n "noun"><!ENTITY v1 "Ichidan verb">]>
+<JMdict>
+  <entry><ent_seq>10001</ent_seq><k_ele><keb>猫</keb><ke_pri>ichi1</ke_pri></k_ele><r_ele><reb>ねこ</reb></r_ele><sense><pos>&n;</pos><gloss>cat</gloss></sense></entry>
+  <entry><ent_seq>10002</ent_seq><k_ele><keb>食べる</keb></k_ele><r_ele><reb>たべる</reb></r_ele><sense><pos>&v1;</pos><gloss>to eat</gloss></sense></entry>
+  <entry><ent_seq>10003</ent_seq><k_ele><keb>生</keb></k_ele><k_ele><keb>生まれ</keb></k_ele><r_ele><reb>なま</reb><re_restr>生</re_restr></r_ele><r_ele><reb>うまれ</reb><re_restr>生まれ</re_restr></r_ele><sense><stagk>生</stagk><stagr>なま</stagr><pos>&n;</pos><gloss>raw</gloss></sense><sense><stagk>生まれ</stagk><stagr>うまれ</stagr><pos>&n;</pos><gloss>birth</gloss></sense></entry>
+  <entry><ent_seq>10004</ent_seq><r_ele><reb>ありがとう</reb><re_nokanji/></r_ele><sense><pos>&n;</pos><gloss>thank you</gloss></sense></entry>
+  <entry><ent_seq>10005</ent_seq><k_ele><keb>橋</keb></k_ele><r_ele><reb>はし</reb></r_ele><sense><pos>&n;</pos><gloss>bridge</gloss></sense></entry>
+  <entry><ent_seq>10006</ent_seq><k_ele><keb>箸</keb></k_ele><r_ele><reb>はし</reb></r_ele><sense><pos>&n;</pos><gloss>chopsticks</gloss></sense></entry>
+  <entry><ent_seq>10007</ent_seq><k_ele><keb>書く</keb></k_ele><r_ele><reb>かく</reb></r_ele><sense><pos>Godan verb with 'ku' ending</pos><gloss>to write</gloss></sense></entry>
+  <entry><ent_seq>10008</ent_seq><k_ele><keb>行く</keb></k_ele><r_ele><reb>いく</reb></r_ele><sense><pos>Godan verb - Iku/Yuku special class</pos><gloss>to go</gloss></sense></entry>
+  <entry><ent_seq>10009</ent_seq><k_ele><keb>高い</keb></k_ele><r_ele><reb>たかい</reb></r_ele><sense><pos>adjective (keiyoushi)</pos><gloss>high</gloss></sense></entry>
+  <entry><ent_seq>10010</ent_seq><k_ele><keb>勉強</keb></k_ele><r_ele><reb>べんきょう</reb></r_ele><sense><pos>noun or participle which takes the aux. verb suru</pos><gloss>study</gloss></sense></entry>
+  <entry><ent_seq>10011</ent_seq><k_ele><keb>猫ぐ</keb></k_ele><k_ele><keb>泳ぐ</keb></k_ele><r_ele><reb>ねこぐ</reb><re_restr>猫ぐ</re_restr></r_ele><r_ele><reb>およぐ</reb><re_restr>泳ぐ</re_restr></r_ele><sense><stagk>猫ぐ</stagk><pos>noun</pos><gloss>synthetic noun</gloss></sense><sense><stagk>泳ぐ</stagk><pos>Godan verb with 'gu' ending</pos><gloss>to swim</gloss></sense></entry>
+</JMdict>
