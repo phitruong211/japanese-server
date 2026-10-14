@@ -11,7 +11,7 @@ import java.util.*;
 
 @Service
 public class DeckGroupShareService {
-    public record Link(String token, int deckCount, int excludedDeckCount, long cardCount) {}
+    public record Link(String token, int deckCount, int excludedDeckCount, long cardCount, boolean includePersonalNotes) {}
     public record PreviewDeck(UUID id, String name, String description, long cardCount) {}
     public record Preview(String name, String author, int deckCount, int excludedDeckCount, long cardCount,
                           int page, int size, int totalPages, List<PreviewDeck> decks) {}
@@ -34,11 +34,16 @@ public class DeckGroupShareService {
     }
     @Transactional
     public Link enable(UUID userId, UUID groupId) {
+        return enable(userId, groupId, null);
+    }
+    @Transactional
+    public Link enable(UUID userId, UUID groupId, DeckShareService.ShareOptions options) {
         content.lockOwners(userId);
         DeckGroup group = owned(userId, groupId);
         em.refresh(group, LockModeType.PESSIMISTIC_WRITE);
         if (eligible(members(group)).isEmpty()) throw empty();
         if (group.getShareToken() == null) group.setShareToken(UUID.randomUUID().toString());
+        if (options != null) group.setSharePersonalNotes(options.includePersonalNotes());
         return link(group);
     }
     @Transactional
@@ -47,6 +52,7 @@ public class DeckGroupShareService {
         DeckGroup group = owned(userId, groupId);
         em.refresh(group, LockModeType.PESSIMISTIC_WRITE);
         group.setShareToken(null);
+        group.setSharePersonalNotes(false);
     }
     @Transactional(readOnly = true)
     public Preview preview(String token, int page) {
@@ -100,7 +106,7 @@ public class DeckGroupShareService {
         for (int i = 0; i < sourceDecks.size(); i++) {
             Deck original = sourceDecks.get(i);
             // Scope to the received group instance. After dissolution, old standalone copies are never moved or overwritten.
-            UUID id = content.copy(userId, original, "share-group:" + target.getId() + ":" + original.getId());
+            UUID id = content.copy(userId, original, "share-group:" + target.getId() + ":" + original.getId(), source.isSharePersonalNotes());
             Deck copy = em.find(Deck.class, id);
             copy.setGroupId(target.getId());
             copy.setPosition(i);
@@ -112,7 +118,7 @@ public class DeckGroupShareService {
         var all = members(group);
         var included = eligible(all);
         return new Link(group.getShareToken(), included.size(), all.size() - included.size(),
-                counts(included).values().stream().mapToLong(Long::longValue).sum());
+                counts(included).values().stream().mapToLong(Long::longValue).sum(), group.isSharePersonalNotes());
     }
     private Map<UUID, Long> counts(List<Deck> included) {
         var counts = new HashMap<UUID, Long>();

@@ -41,5 +41,6 @@ public class Deck {
     @Column(name = "import_hash", length = 64) private String importHash;
     @Column(name = "group_id") private UUID groupId;
     @Column(name = "share_token", length = 36, unique = true) private String shareToken;
+    @Column(name = "share_personal_notes", nullable = false) private boolean sharePersonalNotes;
     @Version private long version;
 }

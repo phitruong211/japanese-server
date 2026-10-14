@@ -18,7 +18,7 @@ public class DeckShareController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.status(CurrentUser.id(auth), id));
     }
     @PutMapping("/decks/{id}/share")
-    DeckShareService.Link enable(Authentication auth, @PathVariable UUID id) { return service.enable(CurrentUser.id(auth), id); }
+    DeckShareService.Link enable(Authentication auth, @PathVariable UUID id, @RequestBody(required = false) DeckShareService.ShareOptions options) { return service.enable(CurrentUser.id(auth), id, options); }
 
     @DeleteMapping("/decks/{id}/share")
     @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)

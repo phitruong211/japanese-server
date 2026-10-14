@@ -14,7 +14,8 @@ import java.util.*;
 
 @Service
 public class DeckShareService {
-    public record Link(String token) {}
+    public record Link(String token, boolean includePersonalNotes) {}
+    public record ShareOptions(boolean includePersonalNotes) {}
     public record PreviewCard(String front, String back, String reading, DomainTypes.CardKind kind, boolean dictionarySource) {}
     public record Preview(String name, String description, String author, int cardCount,
                           int previewCount, int page, int size, int totalPages, List<PreviewCard> cards) {}
@@ -30,16 +31,22 @@ public class DeckShareService {
     }
 
     @Transactional(readOnly = true)
-    public Link status(UUID userId, UUID deckId) { return new Link(owned(userId, deckId).getShareToken()); }
+    public Link status(UUID userId, UUID deckId) { Deck deck = owned(userId, deckId); return new Link(deck.getShareToken(), deck.isSharePersonalNotes()); }
 
     @Transactional
     public Link enable(UUID userId, UUID deckId) {
+        return enable(userId, deckId, null);
+    }
+
+    @Transactional
+    public Link enable(UUID userId, UUID deckId, ShareOptions options) {
         content.lockOwners(userId);
         Deck deck = owned(userId, deckId);
         em.refresh(deck, LockModeType.PESSIMISTIC_WRITE);
         requireActiveImport(deck);
         if (deck.getShareToken() == null) deck.setShareToken(UUID.randomUUID().toString());
-        return new Link(deck.getShareToken());
+        if (options != null) deck.setSharePersonalNotes(options.includePersonalNotes());
+        return new Link(deck.getShareToken(), deck.isSharePersonalNotes());
     }
 
     @Transactional
@@ -49,6 +56,7 @@ public class DeckShareService {
         em.refresh(deck, LockModeType.PESSIMISTIC_WRITE);
         requireActiveImport(deck);
         deck.setShareToken(null);
+        deck.setSharePersonalNotes(false);
     }
 
     @Transactional(readOnly = true)

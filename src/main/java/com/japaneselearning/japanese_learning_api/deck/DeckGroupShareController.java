@@ -16,7 +16,7 @@ public class DeckGroupShareController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.status(CurrentUser.id(auth), id));
     }
     @PutMapping("/deck-groups/{id}/share")
-    DeckGroupShareService.Link enable(Authentication auth, @PathVariable UUID id) { return service.enable(CurrentUser.id(auth), id); }
+    DeckGroupShareService.Link enable(Authentication auth, @PathVariable UUID id, @RequestBody(required = false) DeckShareService.ShareOptions options) { return service.enable(CurrentUser.id(auth), id, options); }
     @DeleteMapping("/deck-groups/{id}/share")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void revoke(Authentication auth, @PathVariable UUID id) { service.revoke(CurrentUser.id(auth), id); }

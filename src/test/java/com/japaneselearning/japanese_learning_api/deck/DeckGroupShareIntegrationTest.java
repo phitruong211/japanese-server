@@ -70,7 +70,7 @@ class DeckGroupShareIntegrationTest {
         var imported = deck(owner, group, "Import", 5, DomainTypes.SourceType.IMPORT);
         var manual = deck(owner, group, "Manual", 3, DomainTypes.SourceType.MANUAL);
         var foreignGroup = group(owner); var outside = deck(owner, foreignGroup, "Outside", 1, DomainTypes.SourceType.IMPORT);
-        assertThat(sharing.status(owner.getId(), group.getId())).isEqualTo(new DeckGroupShareService.Link(null, 1, 1, 5));
+        assertThat(sharing.status(owner.getId(), group.getId())).isEqualTo(new DeckGroupShareService.Link(null, 1, 1, 5, false));
         String token = enable(owner, group);
         assertThat(enable(owner, group)).isEqualTo(token);
         mvc.perform(get("/api/v1/shared-deck-groups/"+token)).andExpect(status().isOk())

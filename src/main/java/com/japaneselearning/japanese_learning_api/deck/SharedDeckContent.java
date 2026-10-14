@@ -3,6 +3,7 @@ package com.japaneselearning.japanese_learning_api.deck;
 import com.japaneselearning.japanese_learning_api.common.ApiException;
 import com.japaneselearning.japanese_learning_api.model.*;
 import com.japaneselearning.japanese_learning_api.repository.CardRepository;
+import com.japaneselearning.japanese_learning_api.notes.*;
 import jakarta.persistence.*;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -14,9 +15,10 @@ import java.util.*;
 public class SharedDeckContent {
     private final CardRepository cards;
     private final DeckService deckService;
+    private final PersonalCardNoteRepository personalNotes;
     @PersistenceContext private EntityManager em;
-    public SharedDeckContent(CardRepository cards, DeckService deckService) {
-        this.cards = cards; this.deckService = deckService;
+    public SharedDeckContent(CardRepository cards, DeckService deckService, PersonalCardNoteRepository personalNotes) {
+        this.cards = cards; this.deckService = deckService; this.personalNotes = personalNotes;
     }
     public void lockOwners(UUID... ids) {
         Arrays.stream(ids).distinct().sorted().forEach(id -> {
@@ -29,7 +31,17 @@ public class SharedDeckContent {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Chỉ có thể nhận tối đa 20.000 thẻ trong một lần");
     }
     public UUID copy(UUID userId, Deck source, String key) {
+        return copy(userId, source, key, source.isSharePersonalNotes());
+    }
+    public UUID copy(UUID userId, Deck source, String key, boolean includePersonalNotes) {
         var sourceCards = cards.findShareCardsForCopy(source.getId());
+        var includedNotes = new HashMap<String, PersonalCardNote>();
+        if (includePersonalNotes) {
+            var noteKeys = sourceCards.stream().map(c -> PersonalCardNoteService.personalKey(c.getId())).toList();
+            for (int offset = 0; offset < noteKeys.size(); offset += 500)
+                personalNotes.findByOwnerIdAndNoteKeyIn(source.getOwner().getId(), noteKeys.subList(offset, Math.min(offset + 500, noteKeys.size())))
+                        .forEach(note -> includedNotes.put(note.getNoteKey(), note));
+        }
         var requests = sourceCards.stream().map(c -> new DeckDtos.CardRequest(
                 c.getFront(), c.getBack(), c.getReading(), c.getNotes(), c.getKind(), c.getPosition(), null,
                 sharedExtraData(c), null)).toList();
@@ -43,6 +55,12 @@ public class SharedDeckContent {
             Card copied = em.find(Card.class, result.cards().get(i).id());
             copied.setDictionaryIdentity(original.getDictionaryIdentity());
             copied.setDictionaryProvenance(original.getDictionaryProvenance());
+            var personal = includedNotes.get(PersonalCardNoteService.personalKey(original.getId()));
+            if (personal != null && !personal.getContent().isBlank()) {
+                var received = new PersonalCardNote(); received.setId(UUID.randomUUID()); received.setOwnerId(userId);
+                received.setNoteKey(PersonalCardNoteService.personalKey(copied.getId())); received.setContent(personal.getContent());
+                received.setRevision(1); received.setUpdatedAt(java.time.Instant.now()); personalNotes.save(received);
+            }
             if (original.getDictionaryProvenance() != null) copied.getExtraData().put("dictionaryRef", original.getDictionaryProvenance());
         }
         return result.deck().id();
