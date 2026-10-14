@@ -22,11 +22,11 @@ public class DeckShareService {
 
     private final DeckRepository decks;
     private final CardRepository cards;
-    private final DeckService deckService;
+    private final SharedDeckContent content;
     @PersistenceContext private EntityManager em;
 
-    public DeckShareService(DeckRepository decks, CardRepository cards, DeckService deckService) {
-        this.decks = decks; this.cards = cards; this.deckService = deckService;
+    public DeckShareService(DeckRepository decks, CardRepository cards, SharedDeckContent content) {
+        this.decks = decks; this.cards = cards; this.content = content;
     }
 
     @Transactional(readOnly = true)
@@ -34,6 +34,7 @@ public class DeckShareService {
 
     @Transactional
     public Link enable(UUID userId, UUID deckId) {
+        content.lockOwners(userId);
         Deck deck = owned(userId, deckId);
         em.refresh(deck, LockModeType.PESSIMISTIC_WRITE);
         requireActiveImport(deck);
@@ -43,6 +44,7 @@ public class DeckShareService {
 
     @Transactional
     public void revoke(UUID userId, UUID deckId) {
+        content.lockOwners(userId);
         Deck deck = owned(userId, deckId);
         em.refresh(deck, LockModeType.PESSIMISTIC_WRITE);
         requireActiveImport(deck);
@@ -52,7 +54,11 @@ public class DeckShareService {
     @Transactional(readOnly = true)
     public Preview preview(String token, int page) {
         if (page < 0) throw new ApiException(HttpStatus.BAD_REQUEST, "Trang xem trước không hợp lệ");
-        Deck deck = shared(token);
+        return preview(shared(token), page);
+    }
+
+    Preview preview(Deck deck, int page) {
+        if (page < 0) throw new ApiException(HttpStatus.BAD_REQUEST, "Trang xem trước không hợp lệ");
         int count = Math.toIntExact(cards.countByDeckIdAndDeletedAtIsNull(deck.getId()));
         int previewCount = (count + 1) / 2;
         int size = 50;
@@ -70,12 +76,11 @@ public class DeckShareService {
     @Transactional
     public CopyResult copy(UUID userId, String token) {
         Deck source = shared(token);
-        // Serialize copying with revocation, then serialize retries for the recipient.
+        // All share and library mutations take user locks before deck locks, in the same order.
+        content.lockOwners(source.getOwner().getId(), userId);
         em.refresh(source, LockModeType.PESSIMISTIC_READ);
         if (!token.equals(source.getShareToken()) || source.getDeletedAt() != null) throw unavailable();
         if (source.getOwner().getId().equals(userId)) return new CopyResult(source.getId(), true);
-        if (em.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE) == null)
-            throw ApiException.notFound("Không tìm thấy người dùng");
         String key = "share:" + source.getId();
         // A locking read sees the latest committed copy even under MySQL REPEATABLE READ.
         // The initial shared-link lookup may already have established an older snapshot.
@@ -85,24 +90,8 @@ public class DeckShareService {
         // Allow saving again after the recipient intentionally deleted their earlier copy.
         previous.ifPresent(deck -> deck.setImportKey(null));
         em.flush();
-        var sourceCards = cards.findAllByDeckIdAndDeletedAtIsNullOrderByPosition(source.getId());
-        if (sourceCards.size() > 20_000) throw new ApiException(HttpStatus.BAD_REQUEST, "Bộ thẻ vượt giới hạn 20.000 thẻ");
-        var requests = sourceCards.stream().map(c -> new DeckDtos.CardRequest(
-                c.getFront(), c.getBack(), c.getReading(), c.getNotes(), c.getKind(), c.getPosition(), null,
-                sharedExtraData(c), null)).toList();
-        var result = deckService.create(userId, new DeckDtos.CreateDeckRequest(
-                source.getName(), source.getDescription(), DomainTypes.SourceType.IMPORT,
-                "Bộ thẻ được chia sẻ", "SHARED", DomainTypes.Visibility.PRIVATE,
-                new HashMap<>(source.getTemplateConfig()), requests, "IMPORT", null, null, source.getTags()));
-        em.find(Deck.class, result.deck().id()).setImportKey(key);
-        for (int i = 0; i < sourceCards.size(); i++) {
-            Card original = sourceCards.get(i);
-            Card copied = em.find(Card.class, result.cards().get(i).id());
-            copied.setDictionaryIdentity(original.getDictionaryIdentity());
-            copied.setDictionaryProvenance(original.getDictionaryProvenance());
-            if (original.getDictionaryProvenance() != null) copied.getExtraData().put("dictionaryRef", original.getDictionaryProvenance());
-        }
-        return new CopyResult(result.deck().id(), false);
+        content.requireCardLimit(List.of(source.getId()));
+        return new CopyResult(content.copy(userId, source, key), false);
     }
 
     private Deck owned(UUID userId, UUID deckId) {
@@ -110,14 +99,6 @@ public class DeckShareService {
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy bộ thẻ"));
         requireActiveImport(deck);
         return deck;
-    }
-
-    private Map<String, Object> sharedExtraData(Card card) {
-        Map<String, Object> data = new HashMap<>(card.getExtraData());
-        if (card.getDictionaryProvenance() != null) data.put("dictionaryRef", card.getDictionaryProvenance());
-        data.remove("sourceRef");
-        data.remove("sourceSheet");
-        return data;
     }
 
     private void requireActiveImport(Deck deck) {

@@ -36,7 +36,8 @@ public class SecurityConfig {
                                 "/error"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/shared-decks/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shared-decks/*", "/api/v1/shared-deck-groups/*",
+                                "/api/v1/shared-deck-groups/*/decks/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/dictionary/search", "/api/v1/dictionary/sources", "/api/v1/dictionary/words/*").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> {

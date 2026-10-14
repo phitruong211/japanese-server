@@ -13,6 +13,16 @@ import java.util.UUID;
 
 public interface CardRepository extends JpaRepository<Card, UUID>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Card> {
     List<Card> findAllByDeckIdAndDeletedAtIsNull(UUID deckId, org.springframework.data.domain.Pageable pageable);
+    interface SharedDeckCount { UUID getDeckId(); long getCardCount(); }
+    @Query("select c.deck.id as deckId, count(c) as cardCount from Card c where c.deck.id in :ids and c.deletedAt is null group by c.deck.id")
+    List<SharedDeckCount> countSharedCards(@Param("ids") List<UUID> ids);
+    // Locking reads see current committed rows under MySQL REPEATABLE READ. Only IDs are loaded for limits.
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c.id from Card c where c.deck.id in :ids and c.deletedAt is null order by c.id")
+    List<UUID> findShareCardIds(@Param("ids") List<UUID> ids, org.springframework.data.domain.Pageable pageable);
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select c from Card c where c.deck.id = :id and c.deletedAt is null order by c.position, c.id")
+    List<Card> findShareCardsForCopy(@Param("id") UUID id);
     interface DeckCounts {
         UUID getDeckId();
         long getNewCount();

@@ -8,6 +8,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface DeckRepository extends JpaRepository<Deck, UUID> {
+    List<Deck> findAllByOwnerIdAndGroupIdAndDeletedAtIsNullOrderByPositionAscIdAsc(UUID ownerId, UUID groupId);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_READ)
+    @org.springframework.data.jpa.repository.Query("select d from Deck d where d.owner.id = :ownerId and d.groupId = :groupId and d.deletedAt is null order by d.position, d.id")
+    List<Deck> findGroupForShareCopy(@org.springframework.data.repository.query.Param("ownerId") UUID ownerId,
+        @org.springframework.data.repository.query.Param("groupId") UUID groupId);
     Optional<Deck> findByShareTokenAndDeletedAtIsNull(String shareToken);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("select d from Deck d where d.owner.id = :ownerId and d.importKey = :key")
