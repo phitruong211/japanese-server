@@ -9,6 +9,7 @@ public class LearningController {
  public LearningController(LearningService service){this.service=service;}
  @GetMapping public LearningDtos.Snapshot get(Authentication auth){return service.get(CurrentUser.id(auth));}
  @PostMapping("/reviews") public LearningDtos.BuiltInReviewResult review(Authentication auth,@Valid @RequestBody LearningDtos.BuiltInReview request){return service.review(CurrentUser.id(auth),request);}
+ @PostMapping("/reviews/batch") public LearningDtos.BuiltInReviewBatchResult reviewBatch(Authentication auth,@Valid @RequestBody LearningDtos.BuiltInReviewBatch request){return service.reviewBatch(CurrentUser.id(auth),request);}
  @PutMapping public LearningDtos.Snapshot put(Authentication auth,@Valid @RequestBody LearningDtos.Update request){return service.put(CurrentUser.id(auth),request);}
  @PostMapping("/guest") public LearningDtos.Result guest(Authentication auth,@Valid @RequestBody LearningDtos.Guest request){return service.migrate(CurrentUser.id(auth),request);}
 }

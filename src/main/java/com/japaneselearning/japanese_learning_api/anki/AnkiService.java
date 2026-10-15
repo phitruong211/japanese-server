@@ -95,7 +95,7 @@ public class AnkiService {
             throw ApiException.conflict("Thẻ đã được ôn trên phiên khác. Hãy mở lại phiên học để tải lịch mới.");
         DomainTypes.AnkiState previousState = progress.getState();
         Integer previousInterval = progress.getIntervalDays();
-        Instant reviewedAt = Instant.now();
+        Instant reviewedAt = ReviewSchedulingTime.resolve(request.ratedAt(), progress.getLastReviewedAt(), Instant.now());
         Double predictedRecall = scheduler.predictedRecall(progress, reviewedAt);
         Double elapsedDays = progress.getLastReviewedAt() == null ? null
                 : Math.max(0, java.time.Duration.between(progress.getLastReviewedAt(), reviewedAt).toMillis() / 86400000.0);

@@ -13,9 +13,11 @@ import static com.japaneselearning.japanese_learning_api.learning.LearningDtos.*
  "spring.datasource.url=jdbc:h2:mem:learning_tests;MODE=MySQL;DB_CLOSE_DELAY=-1",
  "spring.datasource.driver-class-name=org.h2.Driver",
  "spring.datasource.username=sa", "spring.datasource.password=",
+ "spring.jpa.properties.hibernate.generate_statistics=true",
  "spring.jpa.hibernate.ddl-auto=create-drop", "spring.flyway.enabled=false"
 }) @Transactional
 class LearningServiceIntegrationTest {
+ @Autowired jakarta.persistence.EntityManager em;
  @Autowired LearningService service; @Autowired AuthService auth;
  UUID owner(){return auth.register(new AuthDtos.RegisterRequest("learn-"+UUID.randomUUID()+"@example.com","TestPassword123!","Learning","test")).user().id();}
  Bookmark bookmark(){return new Bookmark("vocab-n3-1","vocabulary","2026-09-26T00:00:00Z",null);}
@@ -82,5 +84,40 @@ class LearningServiceIntegrationTest {
       .containsExactlyInAnyOrder(true,false);
   }
   assertThat(service.get(user).srsCards().getFirst().reps()).isEqualTo(1);
+ }
+ @Test void batchKeepsOrderAndDeduplicatesRetriesInsideAndAcrossRequests() {
+  UUID user=owner();
+  var rating=com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD;
+  var first=new BuiltInReview("batch-card","vocabulary",new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),rating,null,null,null,null,null,null,null,0));
+  var second=new BuiltInReview("batch-card","vocabulary",new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),rating,null,null,null,null,null,null,null,1));
+  var request=new BuiltInReviewBatch(List.of(first,first,second));
+  var saved=service.reviewBatch(user,request);
+  assertThat(saved.cards()).extracting(SrsCard::reps).containsExactly(1,1,2);
+  assertThat(saved.state().revision()).isEqualTo(2);
+  var retry=service.reviewBatch(user,request);
+  assertThat(retry.cards()).isEqualTo(saved.cards());
+  assertThat(retry.state().revision()).isEqualTo(2);
+  assertThat(service.get(user).srsCards().getFirst().reps()).isEqualTo(2);
+ }
+ @Test @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+ void conflictingBatchRollsBackAllReviews() {
+  UUID user=owner();
+  var rating=com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD;
+  var first=new BuiltInReview("atomic-card","vocabulary",new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),rating,null,null,null,null,null,null,null,0));
+  var stale=new BuiltInReview("atomic-card","vocabulary",new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),rating,null,null,null,null,null,null,null,0));
+  assertThatThrownBy(()->service.reviewBatch(user,new BuiltInReviewBatch(List.of(first,stale)))).isInstanceOf(ApiException.class);
+  assertThat(service.get(user).srsCards()).isEmpty();
+  assertThat(service.reviewBatch(user,new BuiltInReviewBatch(List.of(first))).cards().getFirst().reps()).isEqualTo(1);
+ }
+ @Test void twentyReviewsWriteTheLearningSnapshotOnlyOnce() {
+  UUID user=owner();service.get(user);em.flush();
+  var statistics=em.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+  statistics.clear();
+  var requests=new ArrayList<BuiltInReview>();
+  for(int i=0;i<20;i++) requests.add(new BuiltInReview("batch-"+i,"vocabulary",new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD,null,null,null,null,null,null,null,0)));
+  var result=service.reviewBatch(user,new BuiltInReviewBatch(requests));
+  assertThat(result.cards()).hasSize(20);
+  assertThat(statistics.getEntityUpdateCount()).isEqualTo(1);
+  assertThat(statistics.getEntityInsertCount()).isEqualTo(20);
  }
 }

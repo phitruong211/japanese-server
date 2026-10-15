@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import static com.japaneselearning.japanese_learning_api.learning.LearningDtos.*;
 import com.japaneselearning.japanese_learning_api.anki.AnkiScheduler;
 import com.japaneselearning.japanese_learning_api.anki.ReviewTiming;
+import com.japaneselearning.japanese_learning_api.anki.ReviewSchedulingTime;
 import com.japaneselearning.japanese_learning_api.model.UserSettings;
 import com.japaneselearning.japanese_learning_api.repository.UserSettingsRepository;
 @Service @Transactional
@@ -34,23 +35,54 @@ public class LearningService {
  }
  public Snapshot get(UUID owner){return read(locked(owner));}
  public BuiltInReviewResult review(UUID owner, BuiltInReview req) {
+  LearningState row=locked(owner);
+  return reviewOne(owner,req,row,read(row),false);
+ }
+ public BuiltInReviewBatchResult reviewBatch(UUID owner, BuiltInReviewBatch batch) {
+  LearningState row=locked(owner);
+  Snapshot current=read(row);
+  var results=new ArrayList<SrsCard>();
+  var handled=new HashMap<UUID,BuiltInReview>();
+  var completed=new HashMap<UUID,SrsCard>();
+  // Queries for receipts must not flush the growing JSON snapshot between reviews.
+  FlushModeType previousFlush=em.getFlushMode();
+  em.setFlushMode(FlushModeType.COMMIT);
+  try {
+   for(var req:batch.reviews()) {
+    UUID id=req.review().clientReviewId();
+    if(id!=null && handled.containsKey(id)) {
+     if(!handled.get(id).equals(req)) throw ApiException.conflict("Mã lượt ôn đã được dùng cho đánh giá khác");
+     results.add(completed.get(id));
+     continue;
+    }
+    var result=reviewOne(owner,req,row,current,true);
+    current=result.state();results.add(result.card());
+    handled.put(id,req);completed.put(id,result.card());
+   }
+   if(current.revision()!=row.getRevision()) {
+    row.setRevision(current.revision());row.setPayload(json.writeValueAsString(current));
+   }
+   em.flush(); // Persist receipts and the final snapshot together, once per batch.
+   return new BuiltInReviewBatchResult(current,results);
+  } finally {em.setFlushMode(previousFlush);}
+ }
+ private BuiltInReviewResult reviewOne(UUID owner, BuiltInReview req, LearningState row, Snapshot previous, boolean deferred) {
   var request = req.review();
   if(request.clientReviewId()==null || request.expectedRepetitions()==null)
    throw new ApiException(HttpStatus.BAD_REQUEST,"Thiếu mã lượt ôn hoặc phiên bản thẻ");
-  LearningState row=locked(owner);
   var prior=em.createQuery("select r from BuiltInReviewLog r where r.userId=:owner and r.requestId=:key",BuiltInReviewLog.class)
     .setParameter("owner",owner).setParameter("key",request.clientReviewId()).getResultList();
   if(!prior.isEmpty()) {
    var log=prior.getFirst();
    if(!log.getCardId().equals(req.cardId()) || !log.getDeckType().equals(req.deckType()) || !log.getRating().equals(request.rating().name()))
     throw ApiException.conflict("Mã lượt ôn đã được dùng cho thẻ hoặc đánh giá khác");
-   return new BuiltInReviewResult(read(row),json.readValue(log.getResultCard(),SrsCard.class));
+   return new BuiltInReviewResult(previous,json.readValue(log.getResultCard(),SrsCard.class));
   }
-  Snapshot previous=read(row);
   var cardMap=index(previous.srsCards(),x->x.deckType()+":"+x.cardId());
   String key=req.deckType()+":"+req.cardId();
   Instant now=Instant.now();
   var progress=BuiltInSchedulerAdapter.read(cardMap.get(key),now);
+  now=ReviewSchedulingTime.resolve(request.ratedAt(),progress.getLastReviewedAt(),now);
   if(progress.getRepetitions()!=request.expectedRepetitions()) throw ApiException.conflict("Thẻ đã thay đổi. Hãy mở lại phiên học.");
   var log=new BuiltInReviewLog();
   log.setId(UUID.randomUUID());log.setUserId(owner);log.setRequestId(request.clientReviewId());
@@ -61,7 +93,9 @@ public class LearningService {
   scheduler.apply(progress,request.rating(),now,null,settings.findById(owner).orElseGet(UserSettings::new),true);
   SrsCard result=BuiltInSchedulerAdapter.write(req.cardId(),req.deckType(),progress);
   cardMap.put(key,result);
-  Snapshot saved=save(row,previous.bookmarks(),new ArrayList<>(cardMap.values()),previous.studyDays());
+  Snapshot saved=deferred
+   ? new Snapshot(previous.revision()+1,previous.bookmarks(),new ArrayList<>(cardMap.values()),previous.studyDays())
+   : save(row,previous.bookmarks(),new ArrayList<>(cardMap.values()),previous.studyDays());
   log.setResultCard(json.writeValueAsString(result));em.persist(log);
   return new BuiltInReviewResult(saved,result);
  }
