@@ -83,17 +83,24 @@ public class AnkiService {
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
         var existing = logs.findByUserIdAndClientReviewId(userId, clientReviewId);
         if (existing.isPresent()) {
+            if (!existing.get().getCard().getId().equals(cardId) || existing.get().getRating() != request.rating())
+                throw ApiException.conflict("Mã lượt ôn đã được dùng cho thẻ hoặc đánh giá khác");
             var saved = objectMapper.readValue(existing.get().getResultProgress(), AnkiDtos.ProgressResponse.class);
             return new AnkiDtos.ReviewResponse(existing.get().getCard().getId(), existing.get().getRating(), saved);
         }
         User user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
         AnkiCardProgress progress = progressRepository.findByUserIdAndCardId(userId, cardId)
                 .orElseGet(() -> newProgress(user, card));
+        if (request.expectedRepetitions() != null && request.expectedRepetitions() != progress.getRepetitions())
+            throw ApiException.conflict("Thẻ đã được ôn trên phiên khác. Hãy mở lại phiên học để tải lịch mới.");
         DomainTypes.AnkiState previousState = progress.getState();
         Integer previousInterval = progress.getIntervalDays();
         Instant reviewedAt = Instant.now();
+        Double predictedRecall = scheduler.predictedRecall(progress, reviewedAt);
+        Double elapsedDays = progress.getLastReviewedAt() == null ? null
+                : Math.max(0, java.time.Duration.between(progress.getLastReviewedAt(), reviewedAt).toMillis() / 86400000.0);
         UserSettings settings = settingsRepository.findById(userId).orElseGet(UserSettings::new);
-        scheduler.apply(progress, request.rating(), reviewedAt, request.responseTimeMs(), settings, true);
+        scheduler.apply(progress, request.rating(), reviewedAt, null, settings, true);
         progressRepository.save(progress);
 
         AnkiReviewLog log = new AnkiReviewLog();
@@ -106,6 +113,15 @@ public class AnkiService {
         log.setPreviousIntervalDays(previousInterval);
         log.setNewIntervalDays(progress.getIntervalDays());
         log.setResponseTimeMs(request.responseTimeMs());
+        log.setRecallTimeMs(request.recallTimeMs());
+        log.setDecisionTimeMs(request.decisionTimeMs());
+        log.setTimeValid(ReviewTiming.isValid(request));
+        log.setShownAt(request.shownAt());
+        log.setRevealedAt(request.revealedAt());
+        log.setRatedAt(request.ratedAt());
+        log.setElapsedDays(elapsedDays);
+        log.setPredictedRecall(predictedRecall);
+        log.setSchedulerVersion(AnkiScheduler.VERSION);
         log.setReviewedAt(reviewedAt);
         log.setClientReviewId(clientReviewId);
         AnkiDtos.ProgressResponse result = response(progress);

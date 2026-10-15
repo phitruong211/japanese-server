@@ -21,6 +21,15 @@ public class AnkiReviewLog {
     @Column(name = "previous_interval_days") private Integer previousIntervalDays;
     @Column(name = "new_interval_days") private Integer newIntervalDays;
     @Column(name = "response_time_ms") private Integer responseTimeMs;
+    @Column(name = "recall_time_ms") private Integer recallTimeMs;
+    @Column(name = "decision_time_ms") private Integer decisionTimeMs;
+    @Column(name = "is_time_valid") private Boolean timeValid;
+    @Column(name = "shown_at") private Instant shownAt;
+    @Column(name = "revealed_at") private Instant revealedAt;
+    @Column(name = "rated_at") private Instant ratedAt;
+    @Column(name = "elapsed_days") private Double elapsedDays;
+    @Column(name = "predicted_recall") private Double predictedRecall;
+    @Column(name = "scheduler_version") private String schedulerVersion;
     @Column(name = "reviewed_at", nullable = false) private Instant reviewedAt;
     @Column(name = "client_review_id") private UUID clientReviewId;
     @Lob @Column(name = "result_progress", columnDefinition = "longtext") private String resultProgress;

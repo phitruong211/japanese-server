@@ -225,6 +225,28 @@ class DeckServiceIntegrationTest {
         assertThat(service.metadata(owner, deck.deck().id()).remainingTodayCount()).isZero();
     }
 
+    @Test void reviewTelemetryIsStoredAndStaleRatingCannotAdvanceProgress() {
+        UUID owner = user();
+        var deck = service.create(owner, request("Timing", List.of(card("one"))));
+        UUID cardId = deck.cards().getFirst().id();
+        var now = java.time.Instant.now();
+        var request = new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(
+            UUID.randomUUID(), DomainTypes.AnkiRating.HARD, null, 5000, 1000, true,
+            now.minusSeconds(10), now.minusSeconds(2), now, 0);
+        var result = anki.review(owner, cardId, request);
+        var log = reviewLogs.findByUserIdAndClientReviewId(owner, request.clientReviewId()).orElseThrow();
+        assertThat(log.getRecallTimeMs()).isEqualTo(5000);
+        assertThat(log.getDecisionTimeMs()).isEqualTo(1000);
+        assertThat(log.getTimeValid()).isTrue();
+        assertThat(log.getPredictedRecall()).isNull();
+        assertThat(log.getSchedulerVersion()).isEqualTo("fsrs-6/java-fsrs-1.0.0");
+        assertThat(result.progress().lapses()).isZero();
+        var stale = new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(
+            UUID.randomUUID(), DomainTypes.AnkiRating.GOOD, null, 0, -1, true, null, null, null, 0);
+        assertThatThrownBy(() -> anki.review(owner, cardId, stale)).isInstanceOf(ApiException.class);
+        assertThat(progressRepository.findByUserIdAndCardId(owner, cardId).orElseThrow().getRepetitions()).isEqualTo(1);
+    }
+
     @Test void repeatedClientReviewIdIsAppliedOnlyOnce() {
         UUID owner = user();
         var deck = service.create(owner, request("Idempotent", List.of(card("one"))));

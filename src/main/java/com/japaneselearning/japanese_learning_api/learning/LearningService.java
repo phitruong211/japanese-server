@@ -12,10 +12,16 @@ import java.time.*;
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
 import static com.japaneselearning.japanese_learning_api.learning.LearningDtos.*;
+import com.japaneselearning.japanese_learning_api.anki.AnkiScheduler;
+import com.japaneselearning.japanese_learning_api.anki.ReviewTiming;
+import com.japaneselearning.japanese_learning_api.model.UserSettings;
+import com.japaneselearning.japanese_learning_api.repository.UserSettingsRepository;
 @Service @Transactional
 public class LearningService {
  private final EntityManager em; private final ObjectMapper json;
- public LearningService(EntityManager em,ObjectMapper json){this.em=em;this.json=json;}
+ private final AnkiScheduler scheduler;
+ private final UserSettingsRepository settings;
+ public LearningService(EntityManager em,ObjectMapper json,AnkiScheduler scheduler,UserSettingsRepository settings){this.em=em;this.json=json;this.scheduler=scheduler;this.settings=settings;}
  private LearningState locked(UUID owner){
   if(em.find(User.class,owner,LockModeType.PESSIMISTIC_WRITE)==null) throw ApiException.unauthorized("Tài khoản không tồn tại");
   LearningState row=em.find(LearningState.class,owner);
@@ -27,6 +33,38 @@ public class LearningService {
   Snapshot snapshot=new Snapshot(row.getRevision()+1,b,s,d);row.setRevision(snapshot.revision());row.setPayload(json.writeValueAsString(snapshot));return snapshot;
  }
  public Snapshot get(UUID owner){return read(locked(owner));}
+ public BuiltInReviewResult review(UUID owner, BuiltInReview req) {
+  var request = req.review();
+  if(request.clientReviewId()==null || request.expectedRepetitions()==null)
+   throw new ApiException(HttpStatus.BAD_REQUEST,"Thiếu mã lượt ôn hoặc phiên bản thẻ");
+  LearningState row=locked(owner);
+  var prior=em.createQuery("select r from BuiltInReviewLog r where r.userId=:owner and r.requestId=:key",BuiltInReviewLog.class)
+    .setParameter("owner",owner).setParameter("key",request.clientReviewId()).getResultList();
+  if(!prior.isEmpty()) {
+   var log=prior.getFirst();
+   if(!log.getCardId().equals(req.cardId()) || !log.getDeckType().equals(req.deckType()) || !log.getRating().equals(request.rating().name()))
+    throw ApiException.conflict("Mã lượt ôn đã được dùng cho thẻ hoặc đánh giá khác");
+   return new BuiltInReviewResult(read(row),json.readValue(log.getResultCard(),SrsCard.class));
+  }
+  Snapshot previous=read(row);
+  var cardMap=index(previous.srsCards(),x->x.deckType()+":"+x.cardId());
+  String key=req.deckType()+":"+req.cardId();
+  Instant now=Instant.now();
+  var progress=BuiltInSchedulerAdapter.read(cardMap.get(key),now);
+  if(progress.getRepetitions()!=request.expectedRepetitions()) throw ApiException.conflict("Thẻ đã thay đổi. Hãy mở lại phiên học.");
+  var log=new BuiltInReviewLog();
+  log.setId(UUID.randomUUID());log.setUserId(owner);log.setRequestId(request.clientReviewId());
+  log.setCardId(req.cardId());log.setDeckType(req.deckType());log.setRating(request.rating().name());log.setReviewedAt(now);
+  log.setPredictedRecall(scheduler.predictedRecall(progress,now));
+  log.setElapsedDays(progress.getLastReviewedAt()==null?null:Math.max(0,Duration.between(progress.getLastReviewedAt(),now).toMillis()/86400000.0));
+  log.setTimeValid(ReviewTiming.isValid(request));log.setTelemetry(json.writeValueAsString(request));log.setSchedulerVersion(AnkiScheduler.VERSION);
+  scheduler.apply(progress,request.rating(),now,null,settings.findById(owner).orElseGet(UserSettings::new),true);
+  SrsCard result=BuiltInSchedulerAdapter.write(req.cardId(),req.deckType(),progress);
+  cardMap.put(key,result);
+  Snapshot saved=save(row,previous.bookmarks(),new ArrayList<>(cardMap.values()),previous.studyDays());
+  log.setResultCard(json.writeValueAsString(result));em.persist(log);
+  return new BuiltInReviewResult(saved,result);
+ }
  public Snapshot put(UUID owner,Update req){
   validate(req.bookmarks(),req.srsCards(),req.studyDays());
   LearningState row=locked(owner);

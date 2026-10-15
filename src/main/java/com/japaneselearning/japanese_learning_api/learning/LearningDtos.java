@@ -3,9 +3,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import java.util.List;
 public final class LearningDtos {
+ public record BuiltInReview(@NotBlank @Size(max=200) String cardId,
+      @NotNull @Pattern(regexp="vocabulary|kanji|grammar") String deckType,
+      @NotNull @Valid com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest review) {}
+ public record BuiltInReviewResult(Snapshot state, SrsCard card) {}
  public record Bookmark(@NotBlank @Size(max=200) String itemId, @Pattern(regexp="vocabulary|kanji|grammar") @NotNull String itemType, @NotBlank @Size(max=50) String createdAt, @Size(max=5000) String note) {}
  public record SrsCard(@NotBlank @Size(max=200) String cardId, @NotNull @Pattern(regexp="vocabulary|kanji|grammar") String deckType, @NotNull @Pattern(regexp="new|learning|review|relearning") String state, @DecimalMin("1.0") @DecimalMax("10.0") double easeFactor, @Min(0) @Max(100000000) Double intervalMinutes, @Min(0) @Max(1000000) Double intervalDays, @NotBlank @Size(max=50) String dueDate, @Min(0) int reps, @Min(0) int lapses, @Size(max=50) String lastReviewedAt,
-                       @Pattern(regexp="fsrs-6") String algorithm, @DecimalMin("0.1") Double stability,
+                       @Pattern(regexp="fsrs-6") String algorithm, @DecimalMin("0.001") Double stability,
                        @DecimalMin("1.0") @DecimalMax("10.0") Double difficulty,
                        @Min(0) Integer elapsedDays, @Min(0) Integer scheduledDays, @Min(0) Integer learningSteps,
                        @Size(max=50) String firstReviewedAt, @Pattern(regexp="again|hard|good|easy") String lastRating) {

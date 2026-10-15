@@ -13,7 +13,13 @@ public final class AnkiDtos {
     private AnkiDtos() {}
 
     public record ReviewRequest(UUID clientReviewId, @NotNull DomainTypes.AnkiRating rating,
-                                @PositiveOrZero Integer responseTimeMs) {
+                                @PositiveOrZero Integer responseTimeMs,
+                                Integer recallTimeMs, Integer decisionTimeMs, Boolean isTimeValid,
+                                Instant shownAt, Instant revealedAt, Instant ratedAt,
+                                Integer expectedRepetitions) {
+        public ReviewRequest(UUID clientReviewId, DomainTypes.AnkiRating rating, Integer responseTimeMs) {
+            this(clientReviewId, rating, responseTimeMs, null, null, null, null, null, null, null);
+        }
         public ReviewRequest(DomainTypes.AnkiRating rating, Integer responseTimeMs) {
             this(null, rating, responseTimeMs);
         }

@@ -17,6 +17,13 @@ import java.time.temporal.ChronoUnit;
 /** Isolates the official FSRS library from the application's persistence model. */
 @Component
 public class AnkiScheduler {
+    public static final String VERSION = "fsrs-6/java-fsrs-1.0.0";
+
+    public Double predictedRecall(AnkiCardProgress progress, Instant now) {
+        if (progress.getState() == DomainTypes.AnkiState.NEW || progress.getLastReviewedAt() == null
+                || progress.getFsrsStability() == null) return null;
+        return Scheduler.builder().build().getCardRetrievability(toFsrsCard(progress, now), now);
+    }
     public void apply(AnkiCardProgress progress, DomainTypes.AnkiRating rating, Instant now,
                       Integer responseTimeMs, UserSettings settings, boolean enableFuzzing) {
         DomainTypes.AnkiState previousState = progress.getState();
@@ -76,9 +83,9 @@ public class AnkiScheduler {
         if (state != State.REVIEW) builder.step(progress.getFsrsStep() == null ? 0 : progress.getFsrsStep());
         else if (progress.getFsrsStep() != null) builder.step(progress.getFsrsStep());
         if (progress.getFsrsStability() != null) builder.stability(progress.getFsrsStability());
-        else if (state == State.REVIEW) builder.stability(Math.max(0.1, progress.getIntervalDays() == null ? 1 : progress.getIntervalDays()));
+        else builder.stability(Math.max(0.1, progress.getIntervalDays() == null ? 1 : progress.getIntervalDays()));
         if (progress.getFsrsDifficulty() != null) builder.difficulty(progress.getFsrsDifficulty());
-        else if (state == State.REVIEW) builder.difficulty(5.0);
+        else builder.difficulty(5.0);
         return builder.build();
     }
 

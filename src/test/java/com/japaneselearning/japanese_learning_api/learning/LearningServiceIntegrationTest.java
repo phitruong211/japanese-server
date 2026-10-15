@@ -51,4 +51,36 @@ class LearningServiceIntegrationTest {
   assertThat(saved.srsCards()).containsExactly(fsrsCard());
   assertThat(service.get(user).srsCards()).containsExactly(fsrsCard());
  }
+ @Test void builtInReviewsAreAuthoritativeIdempotentAndRejectStaleState(){
+  UUID user=owner(),operation=UUID.randomUUID();
+  var rating=com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD;
+  var request=new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(operation,rating,null,0,0,false,null,null,null,0);
+  var review=new BuiltInReview("vocab-n3-1","vocabulary",request);
+  var first=service.review(user,review);
+  var retry=service.review(user,review);
+  assertThat(first.card().reps()).isEqualTo(1);
+  assertThat(retry.card()).isEqualTo(first.card());
+  assertThat(retry.state().revision()).isEqualTo(first.state().revision());
+  assertThat(service.get(user).srsCards()).containsExactly(first.card());
+  var stale=new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),rating,null,null,null,null,null,null,null,0);
+  assertThatThrownBy(()->service.review(user,new BuiltInReview("vocab-n3-1","vocabulary",stale))).isInstanceOf(ApiException.class);
+ }
+ @Test @org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+ void concurrentSessionsCannotApplyTwoRatingsToOneVersion() throws Exception {
+  UUID user=owner();
+  var gate=new java.util.concurrent.CountDownLatch(1);
+  try(var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+   java.util.concurrent.Callable<Boolean> task=()->{
+    gate.await();
+    var req=new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),
+      com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD,null,null,null,null,null,null,null,0);
+    try { service.review(user,new BuiltInReview("concurrent","kanji",req));return true; }
+    catch(ApiException conflict){assertThat(conflict.status().value()).isEqualTo(409);return false;}
+   };
+   var a=executor.submit(task);var b=executor.submit(task);gate.countDown();
+   assertThat(List.of(a.get(20,java.util.concurrent.TimeUnit.SECONDS),b.get(20,java.util.concurrent.TimeUnit.SECONDS)))
+      .containsExactlyInAnyOrder(true,false);
+  }
+  assertThat(service.get(user).srsCards().getFirst().reps()).isEqualTo(1);
+ }
 }

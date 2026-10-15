@@ -21,7 +21,9 @@ public interface AnkiCardProgressRepository extends JpaRepository<AnkiCardProgre
           and c.deletedAt is null and d.deletedAt is null and d.owner.id = :userId
           and p.state <> com.japaneselearning.japanese_learning_api.model.DomainTypes$AnkiState.NEW
           and (:deckId is null or d.id = :deckId)
-        order by p.dueAt, p.id
+        order by case when p.state = com.japaneselearning.japanese_learning_api.model.DomainTypes$AnkiState.RELEARNING then 0
+                      when p.state = com.japaneselearning.japanese_learning_api.model.DomainTypes$AnkiState.LEARNING then 1
+                      else 2 end, p.dueAt, p.id
         """)
     List<AnkiCardProgress> findDue(@Param("userId") UUID userId, @Param("deckId") UUID deckId, @Param("now") Instant now, org.springframework.data.domain.Pageable pageable);
 
