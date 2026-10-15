@@ -9,6 +9,8 @@ import java.util.UUID;
 @Entity @Table(name="builtin_review_logs", uniqueConstraints=@UniqueConstraint(columnNames={"user_id", "request_id"}))
 @Getter @Setter @NoArgsConstructor
 public class BuiltInReviewLog {
+    @Column(columnDefinition="longtext") private String beforeCard;
+    private Instant undoneAt;
     @Id private UUID id;
     @Column(name="user_id", nullable=false) private UUID userId;
     @Column(name="request_id", nullable=false) private UUID requestId;

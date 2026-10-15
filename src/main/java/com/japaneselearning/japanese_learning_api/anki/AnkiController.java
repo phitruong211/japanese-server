@@ -26,6 +26,11 @@ public class AnkiController {
         return service.deckCards(CurrentUser.id(auth), deckId);
     }
 
+    @PostMapping("/cards/{cardId}/reviews/{clientReviewId}/undo")
+    AnkiDtos.UndoResponse undo(Authentication auth, @PathVariable UUID cardId, @PathVariable UUID clientReviewId) {
+        return service.undo(CurrentUser.id(auth), cardId, clientReviewId);
+    }
+
     @PostMapping("/cards/{cardId}/reviews")
     AnkiDtos.ReviewResponse review(Authentication auth, @PathVariable UUID cardId,
                                    @Valid @RequestBody AnkiDtos.ReviewRequest request) {

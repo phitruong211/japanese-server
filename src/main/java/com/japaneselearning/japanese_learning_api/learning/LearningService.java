@@ -74,6 +74,7 @@ public class LearningService {
     .setParameter("owner",owner).setParameter("key",request.clientReviewId()).getResultList();
   if(!prior.isEmpty()) {
    var log=prior.getFirst();
+   if(log.getUndoneAt()!=null) throw ApiException.conflict("Lượt ôn đã được hoàn tác");
    if(!log.getCardId().equals(req.cardId()) || !log.getDeckType().equals(req.deckType()) || !log.getRating().equals(request.rating().name()))
     throw ApiException.conflict("Mã lượt ôn đã được dùng cho thẻ hoặc đánh giá khác");
    return new BuiltInReviewResult(previous,json.readValue(log.getResultCard(),SrsCard.class));
@@ -90,6 +91,7 @@ public class LearningService {
   log.setPredictedRecall(scheduler.predictedRecall(progress,now));
   log.setElapsedDays(progress.getLastReviewedAt()==null?null:Math.max(0,Duration.between(progress.getLastReviewedAt(),now).toMillis()/86400000.0));
   log.setTimeValid(ReviewTiming.isValid(request));log.setTelemetry(json.writeValueAsString(request));log.setSchedulerVersion(AnkiScheduler.VERSION);
+  log.setBeforeCard(json.writeValueAsString(cardMap.get(key)));
   scheduler.apply(progress,request.rating(),now,null,settings.findById(owner).orElseGet(UserSettings::new),true);
   SrsCard result=BuiltInSchedulerAdapter.write(req.cardId(),req.deckType(),progress);
   cardMap.put(key,result);
@@ -98,6 +100,28 @@ public class LearningService {
    : save(row,previous.bookmarks(),new ArrayList<>(cardMap.values()),previous.studyDays());
   log.setResultCard(json.writeValueAsString(result));em.persist(log);
   return new BuiltInReviewResult(saved,result);
+ }
+ public BuiltInReviewResult undo(UUID owner,UUID requestId) {
+  LearningState row=locked(owner);
+  Snapshot current=read(row);
+  var logs=em.createQuery("select r from BuiltInReviewLog r where r.userId=:owner and r.requestId=:key",BuiltInReviewLog.class)
+   .setParameter("owner",owner).setParameter("key",requestId).getResultList();
+  if(logs.isEmpty()) throw ApiException.notFound("Không tìm thấy lượt ôn");
+  var log=logs.getFirst();
+  var cards=index(current.srsCards(),x->x.deckType()+":"+x.cardId());
+  String key=log.getDeckType()+":"+log.getCardId();
+  SrsCard effective=cards.get(key);
+  if(log.getBeforeCard()==null) throw ApiException.conflict("Lượt ôn cũ không hỗ trợ hoàn tác");
+  if(log.getUndoneAt()==null) {
+   if(!Objects.equals(effective,json.readValue(log.getResultCard(),SrsCard.class)))
+    throw ApiException.conflict("Thẻ đã thay đổi trên phiên khác. Hãy tải lại lịch ôn.");
+   effective=json.readValue(log.getBeforeCard(),SrsCard.class);
+   if(effective==null) cards.remove(key); else cards.put(key,effective);
+   log.setUndoneAt(Instant.now());
+   current=save(row,current.bookmarks(),new ArrayList<>(cards.values()),current.studyDays());
+  }
+  if(effective==null) effective=BuiltInSchedulerAdapter.write(log.getCardId(),log.getDeckType(),BuiltInSchedulerAdapter.read(null,log.getReviewedAt()));
+  return new BuiltInReviewResult(current,effective);
  }
  public Snapshot put(UUID owner,Update req){
   validate(req.bookmarks(),req.srsCards(),req.studyDays());

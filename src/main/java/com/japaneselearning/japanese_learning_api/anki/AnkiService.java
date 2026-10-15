@@ -83,14 +83,16 @@ public class AnkiService {
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
         var existing = logs.findByUserIdAndClientReviewId(userId, clientReviewId);
         if (existing.isPresent()) {
+            if (existing.get().getUndoneAt() != null) throw ApiException.conflict("Lượt ôn đã được hoàn tác");
             if (!existing.get().getCard().getId().equals(cardId) || existing.get().getRating() != request.rating())
                 throw ApiException.conflict("Mã lượt ôn đã được dùng cho thẻ hoặc đánh giá khác");
             var saved = objectMapper.readValue(existing.get().getResultProgress(), AnkiDtos.ProgressResponse.class);
             return new AnkiDtos.ReviewResponse(existing.get().getCard().getId(), existing.get().getRating(), saved);
         }
         User user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
-        AnkiCardProgress progress = progressRepository.findByUserIdAndCardId(userId, cardId)
-                .orElseGet(() -> newProgress(user, card));
+        var previousProgress = progressRepository.findByUserIdAndCardId(userId, cardId);
+        AnkiCardProgress progress = previousProgress.orElseGet(() -> newProgress(user, card));
+        String beforeProgress = objectMapper.writeValueAsString(response(progress));
         if (request.expectedRepetitions() != null && request.expectedRepetitions() != progress.getRepetitions())
             throw ApiException.conflict("Thẻ đã được ôn trên phiên khác. Hãy mở lại phiên học để tải lịch mới.");
         DomainTypes.AnkiState previousState = progress.getState();
@@ -101,10 +103,15 @@ public class AnkiService {
                 : Math.max(0, java.time.Duration.between(progress.getLastReviewedAt(), reviewedAt).toMillis() / 86400000.0);
         UserSettings settings = settingsRepository.findById(userId).orElseGet(UserSettings::new);
         scheduler.apply(progress, request.rating(), reviewedAt, null, settings, true);
+        progress.setDueAt(precise(progress.getDueAt()));
+        progress.setLastReviewedAt(precise(progress.getLastReviewedAt()));
+        progress.setFirstReviewedAt(precise(progress.getFirstReviewedAt()));
         progressRepository.save(progress);
 
         AnkiReviewLog log = new AnkiReviewLog();
         log.setId(UUID.randomUUID());
+        log.setBeforeProgress(beforeProgress);
+        log.setProgressExisted(previousProgress.isPresent());
         log.setUser(user);
         log.setCard(card);
         log.setRating(request.rating());
@@ -130,6 +137,34 @@ public class AnkiService {
         return new AnkiDtos.ReviewResponse(cardId, request.rating(), result);
     }
 
+    @Transactional
+    public AnkiDtos.UndoResponse undo(UUID userId, UUID cardId, UUID clientReviewId) {
+        cards.findReviewCardForUpdate(cardId, userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
+        var log = logs.findByUserIdAndClientReviewId(userId, clientReviewId)
+                .filter(l -> l.getCard().getId().equals(cardId)).orElseThrow(() -> ApiException.notFound("Không tìm thấy lượt ôn"));
+        if (log.getBeforeProgress() == null) throw ApiException.conflict("Lượt ôn cũ không hỗ trợ hoàn tác");
+        var current = progressRepository.findByUserIdAndCardId(userId, cardId);
+        var before = objectMapper.readValue(log.getBeforeProgress(), AnkiDtos.ProgressResponse.class);
+        if (log.getUndoneAt() != null) return new AnkiDtos.UndoResponse(cardId, current.map(this::response).orElse(before));
+        if (current.isEmpty() || !response(current.get()).equals(objectMapper.readValue(log.getResultProgress(), AnkiDtos.ProgressResponse.class)))
+            throw ApiException.conflict("Thẻ đã thay đổi trên phiên khác. Hãy tải lại lịch ôn.");
+        if (Boolean.FALSE.equals(log.getProgressExisted())) progressRepository.delete(current.get());
+        else restore(current.get(), before);
+        log.setUndoneAt(Instant.now());
+        return new AnkiDtos.UndoResponse(cardId, before);
+    }
+
+    private void restore(AnkiCardProgress p, AnkiDtos.ProgressResponse s) {
+        p.setState(s.state()); p.setEaseFactor(s.easeFactor()); p.setIntervalMinutes(s.intervalMinutes());
+        p.setIntervalDays(s.intervalDays()); p.setDueAt(s.dueAt()); p.setRepetitions(s.repetitions());
+        p.setLapses(s.lapses()); p.setLastReviewedAt(s.lastReviewedAt()); p.setFirstReviewedAt(s.firstReviewedAt());
+        p.setFsrsAlgorithm(s.algorithm()); p.setFsrsStability(s.stability()); p.setFsrsDifficulty(s.difficulty());
+        p.setFsrsElapsedDays(s.elapsedDays()); p.setFsrsScheduledDays(s.scheduledDays());
+        p.setFsrsStep(s.learningSteps()); p.setLastRating(s.lastRating());
+    }
+
+    private Instant precise(Instant value) { return value == null ? null : value.truncatedTo(java.time.temporal.ChronoUnit.MICROS); }
+
     private AnkiCardProgress newProgress(User user, Card card) {
         AnkiCardProgress progress = new AnkiCardProgress();
         progress.setId(UUID.randomUUID());
@@ -147,10 +182,10 @@ public class AnkiService {
     }
 
     private AnkiDtos.ProgressResponse response(AnkiCardProgress progress) {
-        return new AnkiDtos.ProgressResponse(progress.getState(), progress.getEaseFactor(), progress.getIntervalMinutes(),
-                progress.getIntervalDays(), progress.getDueAt(), progress.getRepetitions(), progress.getLapses(),
-                progress.getLastReviewedAt(), progress.getFsrsAlgorithm(), progress.getFsrsStability(),
+        return new AnkiDtos.ProgressResponse(progress.getState(), progress.getEaseFactor().setScale(2, java.math.RoundingMode.HALF_UP), progress.getIntervalMinutes(),
+                progress.getIntervalDays(), precise(progress.getDueAt()), progress.getRepetitions(), progress.getLapses(),
+                precise(progress.getLastReviewedAt()), progress.getFsrsAlgorithm(), progress.getFsrsStability(),
                 progress.getFsrsDifficulty(), progress.getFsrsElapsedDays(), progress.getFsrsScheduledDays(),
-                progress.getFsrsStep(), progress.getFirstReviewedAt(), progress.getLastRating());
+                progress.getFsrsStep(), precise(progress.getFirstReviewedAt()), progress.getLastRating());
     }
 }

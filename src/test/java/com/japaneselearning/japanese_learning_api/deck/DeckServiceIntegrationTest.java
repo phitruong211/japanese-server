@@ -260,4 +260,29 @@ class DeckServiceIntegrationTest {
         assertThat(progressRepository.findByUserIdAndCardId(owner, cardId).orElseThrow().getRepetitions()).isEqualTo(1);
         assertThat(reviewLogs.count()).isEqualTo(1);
     }
+    @Test void undoNewPersonalCardIsDurableAndDoesNotOverwriteLaterReviewOnRetry() {
+        UUID owner=user();var deck=service.create(owner,request("Undo",List.of(card("one"))));
+        UUID id=deck.cards().getFirst().id();
+        var req=new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),DomainTypes.AnkiRating.GOOD,900);
+        anki.review(owner,id,req);
+        var undone=anki.undo(owner,id,req.clientReviewId());
+        assertThat(undone.progress().state()).isEqualTo(DomainTypes.AnkiState.NEW);
+        assertThat(progressRepository.findByUserIdAndCardId(owner,id)).isEmpty();
+        assertThat(anki.undo(owner,id,req.clientReviewId())).isEqualTo(undone);
+        assertThatThrownBy(()->anki.review(owner,id,req)).isInstanceOf(ApiException.class);
+        var next=anki.review(owner,id,new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(DomainTypes.AnkiRating.AGAIN,100));
+        assertThat(anki.undo(owner,id,req.clientReviewId()).progress()).isEqualTo(next.progress());
+    }
+    @Test void undoPersonalRestoresEverySchedulerFieldAndRejectsStaleAndForeignRequests() {
+        UUID owner=user();var deck=service.create(owner,request("Undo existing",List.of(card("one"))));
+        UUID id=deck.cards().getFirst().id();
+        var first=new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),DomainTypes.AnkiRating.GOOD,900);
+        var before=anki.review(owner,id,first).progress();
+        var second=new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),DomainTypes.AnkiRating.AGAIN,900);
+        anki.review(owner,id,second);
+        assertThatThrownBy(()->anki.undo(owner,id,first.clientReviewId())).isInstanceOf(ApiException.class);
+        assertThatThrownBy(()->anki.undo(user(),id,second.clientReviewId())).isInstanceOf(ApiException.class);
+        assertThat(anki.undo(owner,id,second.clientReviewId()).progress()).isEqualTo(before);
+        assertThat(anki.deckCards(owner,deck.deck().id()).getFirst().progress()).isEqualTo(before);
+    }
 }

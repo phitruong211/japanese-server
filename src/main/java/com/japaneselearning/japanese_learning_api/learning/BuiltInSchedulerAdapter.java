@@ -29,9 +29,9 @@ final class BuiltInSchedulerAdapter {
         return new SrsCard(id, type, p.getState().name().toLowerCase(Locale.ROOT), p.getEaseFactor().doubleValue(),
                 p.getIntervalMinutes() == null ? null : p.getIntervalMinutes().doubleValue(),
                 p.getIntervalDays() == null ? null : p.getIntervalDays().doubleValue(), p.getDueAt().toString(),
-                p.getRepetitions(), p.getLapses(), p.getLastReviewedAt().toString(), p.getFsrsAlgorithm(),
+                p.getRepetitions(), p.getLapses(), p.getLastReviewedAt() == null ? null : p.getLastReviewedAt().toString(), p.getFsrsAlgorithm(),
                 p.getFsrsStability(), p.getFsrsDifficulty(), p.getFsrsElapsedDays(), p.getFsrsScheduledDays(),
-                p.getFsrsStep() == null ? 0 : p.getFsrsStep(), p.getFirstReviewedAt().toString(),
-                p.getLastRating().name().toLowerCase(Locale.ROOT));
+                p.getFsrsStep() == null ? 0 : p.getFsrsStep(), p.getFirstReviewedAt() == null ? null : p.getFirstReviewedAt().toString(),
+                p.getLastRating() == null ? null : p.getLastRating().name().toLowerCase(Locale.ROOT));
     }
 }

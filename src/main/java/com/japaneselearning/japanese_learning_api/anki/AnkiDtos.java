@@ -37,5 +37,7 @@ public final class AnkiDtos {
                             Map<String, Object> extraData,
                             ProgressResponse progress) {}
 
+    public record UndoResponse(UUID cardId, ProgressResponse progress) {}
+
     public record ReviewResponse(UUID cardId, DomainTypes.AnkiRating rating, ProgressResponse progress) {}
 }

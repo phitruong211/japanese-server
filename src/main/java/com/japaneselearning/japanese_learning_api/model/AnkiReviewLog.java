@@ -12,6 +12,9 @@ import java.util.UUID;
 @Table(name = "anki_review_logs")
 @Getter @Setter @NoArgsConstructor
 public class AnkiReviewLog {
+    @Lob @Column(columnDefinition="longtext") private String beforeProgress;
+    private Boolean progressExisted;
+    private Instant undoneAt;
     @Id private UUID id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "user_id") private User user;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "card_id") private Card card;

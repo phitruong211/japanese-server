@@ -120,4 +120,37 @@ class LearningServiceIntegrationTest {
   assertThat(statistics.getEntityUpdateCount()).isEqualTo(1);
   assertThat(statistics.getEntityInsertCount()).isEqualTo(20);
  }
+ @Test void undoRestoresCompleteFsrsAndPreservesStatisticsAndRejectsOldReviewRetry() {
+  UUID user=owner();
+  var prior=fsrsCard();
+  service.put(user,new Update(0,List.of(bookmark()),List.of(prior),List.of(day(2))));
+  var req=undoReview(prior.cardId(),4);
+  service.review(user,req);
+  var undone=service.undo(user,req.review().clientReviewId());
+  assertThat(undone.card()).isEqualTo(prior);
+  assertThat(undone.state().studyDays()).containsExactly(day(2));
+  assertThat(undone.state().bookmarks()).containsExactly(bookmark());
+  assertThat(service.undo(user,req.review().clientReviewId())).isEqualTo(undone);
+  assertThatThrownBy(()->service.review(user,req)).isInstanceOf(ApiException.class);
+ }
+ @Test void undoNewCardAndRetryAfterAnotherReviewReturnsCurrentState() {
+  UUID user=owner();var req=undoReview("undo-new",0);
+  service.review(user,req);
+  var undo=service.undo(user,req.review().clientReviewId());
+  assertThat(undo.card().state()).isEqualTo("new");
+  assertThat(undo.state().srsCards()).isEmpty();
+  var newer=service.review(user,undoReview("undo-new",0));
+  assertThat(service.undo(user,req.review().clientReviewId()).card()).isEqualTo(newer.card());
+  assertThat(service.get(user)).isEqualTo(newer.state());
+ }
+ @Test void undoRejectsLaterReviewAndForeignReceipt() {
+  UUID user=owner();var req=undoReview("undo-conflict",0);
+  service.review(user,req);var newer=service.review(user,undoReview("undo-conflict",1));
+  assertThatThrownBy(()->service.undo(user,req.review().clientReviewId())).isInstanceOf(ApiException.class);
+  assertThat(service.get(user)).isEqualTo(newer.state());
+  assertThatThrownBy(()->service.undo(owner(),req.review().clientReviewId())).isInstanceOf(ApiException.class);
+ }
+ private BuiltInReview undoReview(String id,int reps) {
+  return new BuiltInReview(id,"kanji",new com.japaneselearning.japanese_learning_api.anki.AnkiDtos.ReviewRequest(UUID.randomUUID(),com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD,null,null,null,null,null,null,null,reps));
+ }
 }
