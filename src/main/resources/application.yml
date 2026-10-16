@@ -25,6 +25,11 @@ server:
   port: ${PORT:8080}
   error:
     include-message: never
+  # Learning snapshots reach ~1.5 MB of repetitive JSON and are returned by every review batch.
+  compression:
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+    mime-types: application/json
+    min-response-size: 2KB
 
 app:
   jwt:

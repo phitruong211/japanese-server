@@ -71,6 +71,8 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
         config.setExposedHeaders(List.of("Location"));
+        // Without this the browser re-sends a preflight for almost every API call (frontend and API are on different origins).
+        config.setMaxAge(java.time.Duration.ofHours(1));
         config.setAllowCredentials(!allowAllOrigins);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
