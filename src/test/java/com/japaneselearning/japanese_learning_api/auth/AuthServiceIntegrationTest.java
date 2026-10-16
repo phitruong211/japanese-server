@@ -10,6 +10,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import com.japaneselearning.japanese_learning_api.common.ApiException;
+import com.japaneselearning.japanese_learning_api.model.DomainTypes.UserStatus;
+import com.japaneselearning.japanese_learning_api.model.User;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -57,5 +61,46 @@ class AuthServiceIntegrationTest {
                 .andExpect(jsonPath("$.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.user.email").value(email));
         entityManager.flush();
+    }
+
+    private AuthDtos.AuthResponse registerUser() {
+        return authService.register(new AuthDtos.RegisterRequest(
+                "status-" + System.nanoTime() + "@example.com", "TestPassword123!", "Status", "integration-test"));
+    }
+
+    private void setStatus(AuthDtos.AuthResponse response, UserStatus status) {
+        entityManager.flush();
+        entityManager.find(User.class, response.user().id()).setStatus(status);
+        entityManager.flush();
+    }
+
+    @Test
+    void refreshRotatesTokenForActiveUser() {
+        AuthDtos.AuthResponse session = registerUser();
+        AuthDtos.AuthResponse renewed = authService.refresh(new AuthDtos.RefreshRequest(session.refreshToken(), "integration-test"));
+        assertThat(renewed.refreshToken()).isNotEqualTo(session.refreshToken());
+    }
+
+    @Test
+    void refreshRejectsLockedAndDisabledUsersWithoutRevokingOrRotating() {
+        for (UserStatus blocked : new UserStatus[] {UserStatus.LOCKED, UserStatus.DISABLED}) {
+            AuthDtos.AuthResponse session = registerUser();
+            setStatus(session, blocked);
+            var request = new AuthDtos.RefreshRequest(session.refreshToken(), "integration-test");
+            assertThatThrownBy(() -> authService.refresh(request))
+                    .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status().value()).isEqualTo(401));
+            // Restoring the account proves the failed attempt did not consume the token.
+            setStatus(session, UserStatus.ACTIVE);
+            assertThat(authService.refresh(request).accessToken()).isNotBlank();
+        }
+    }
+
+    @Test
+    void meRejectsInactiveUser() {
+        AuthDtos.AuthResponse session = registerUser();
+        assertThat(authService.me(session.user().id()).email()).isEqualTo(session.user().email());
+        setStatus(session, UserStatus.LOCKED);
+        assertThatThrownBy(() -> authService.me(session.user().id()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status().value()).isEqualTo(401));
     }
 }
