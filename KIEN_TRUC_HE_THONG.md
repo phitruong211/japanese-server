@@ -1,6 +1,6 @@
 # Kiến trúc chi tiết hệ thống SỔ NHẬT — Backend và Frontend
 
-> Ngày kiểm tra: **15/10/2026**. Workspace: `D:\project\NHAT`.
+> Ngày kiểm tra: **15/10/2026**, cập nhật theo mã nguồn ngày **17/10/2026**. Workspace: `D:\project\NHAT`.
 > Tài liệu mô tả mã nguồn đang có tại thời điểm kiểm tra. Các mục “đề xuất” và “cần xác minh” không phải chức năng đã triển khai.
 > Phạm vi: kiến trúc ứng dụng, module, trách nhiệm từng file nguồn, API, lưu trữ, dữ liệu, luồng nghiệp vụ, bảo mật, triển khai và kết quả kiểm tra. Không kiểm toán hạ tầng production hoặc tài khoản dịch vụ bên ngoài.
 
@@ -44,7 +44,7 @@ Hệ thống có **hai repository Git độc lập**, `FE/N3/.git` và `BE/japan
 | Nhân vật 3D | Three.js `^0.186.1`, GLTF/Draco | Mèo trên dashboard |
 | BE | Java **21**, Spring Boot **4.1.1**, Maven Wrapper | REST API dạng monolith theo module |
 | Persistence | Spring Data JPA, Hibernate, MySQL Connector/J | Mapping entity, truy vấn và transaction |
-| Schema | Flyway, `flyway-mysql` | 13 migration V1–V13 |
+| Schema | Flyway, `flyway-mysql` | 16 migration V1–V16 |
 | Bộ lập lịch BE | `io.github.open-spaced-repetition:fsrs:1.0.0` | FSRS cho thẻ cá nhân |
 | Xác thực | Spring Security, JWT HMAC tự triển khai, BCrypt | Access token, refresh token và kiểm soát truy cập |
 | API docs | Springdoc **3.1.1** | OpenAPI và Swagger UI |
@@ -69,7 +69,7 @@ flowchart TD
     HTTP --> SEC[Spring Security / JWT filter]
     SEC --> SERVICES[Auth / Deck / Anki / Learning / Notes / Dictionary]
     SERVICES --> DB[(MySQL 8.4)]
-    FLY[Flyway V1 đến V13] --> DB
+    FLY[Flyway V1 đến V16] --> DB
     JM[Import JMdict bằng command riêng] --> DB
     SPA --> LISTEN[GitHub catalogue và máy chủ podcast]
 ```
@@ -112,7 +112,7 @@ NHAT/
         │   │   └── resources/
         │   │       ├── application.yml        # Cấu hình runtime chính
         │   │       ├── application.properties # Application name
-        │   │       └── db/migration/          # Schema Flyway V1–V13
+        │   │       └── db/migration/          # Schema Flyway V1–V16
         │   └── test/
         │       ├── java/      # Unit/integration test theo module
         │       └── resources/ # Fixture JMdict
@@ -171,11 +171,13 @@ FE/N3/src/
 │   │   ├── CardFields.tsx  # Trường nhập/sửa dữ liệu card dùng chung
 │   │   ├── CardPresentation.tsx  # Renderer hai mặt và template/reading/examples/note của thẻ
 │   │   ├── DeckCard.tsx  # Card danh mục bộ, summary, metric và CTA
+│   │   ├── deckCard.css  # Style card bộ thẻ
 │   │   ├── DeckGrid.tsx  # Bố cục responsive danh sách bộ
 │   │   ├── deckGroups.css  # Style nhóm bộ thẻ
 │   │   ├── DeckGroups.tsx  # UI quản lý group, mở/đổi tên/giải tán/sắp xếp và chuyển bộ
 │   │   ├── DeckShareDialog.tsx  # Tạo/copy/revoke link, trạng thái và consent personal notes
-│   │   ├── FlashcardPage.tsx  # Export page free/scheduled qua UnifiedDeckPage; chứa thêm helper/session code cũ
+│   │   ├── DeckWidgetCustomize.tsx  # Bảng tùy chỉnh widget nhóm (kích thước, màu, độ mờ), không modal, xem trước trực tiếp
+│   │   ├── FlashcardPage.tsx  # FlashcardPage/AnkiPage mỏng bọc UnifiedDeckPage (free/scheduled) và helper speakJapanese
 │   │   ├── FuriganaText.tsx  # Hiển thị ruby/reading từ segment furigana
 │   │   ├── ImportedDecks.tsx  # Quản lý bộ cá nhân, import/tạo/sửa, phân trang cards, mở học và nhóm
 │   │   ├── ImportGuide.tsx  # Hướng dẫn định dạng import, prompt và file mẫu
@@ -189,7 +191,9 @@ FE/N3/src/
 │   │   ├── SharedGroupPage.tsx  # Trang public nhóm chia sẻ, danh sách deck và nhận nhóm
 │   │   ├── SharedPageLayout.tsx  # Khung giao diện trang chia sẻ độc lập không gian học
 │   │   ├── sharing.css  # Style trang/dialog chia sẻ
-│   │   ├── StudySession.tsx  # Phiên học chung: lật thẻ, rating, queue/timer, audio, ghi metric và sửa thẻ phù hợp
+│   │   ├── StudySession.tsx  # Phiên học chung: lật thẻ, rating, queue, enqueue lượt ôn vào outbox, hoàn tác (Backspace), audio, ghi metric và sửa thẻ
+│   │   ├── studySession.css  # Style phiên học
+│   │   ├── StudyClock.tsx  # Đồng hồ thời gian học hiển thị, tạm dừng khi ẩn tab hoặc mở hộp thoại
 │   │   ├── StudySetupSheet.tsx  # Chọn bài/options trước phiên học tự do
 │   │   ├── UnifiedDeckPage.tsx  # Hợp nhất danh mục tích hợp/cá nhân/saved cho mode free hoặc scheduled
 │   │   ├── useDeckGroupSizes.ts  # Resize chiều rộng/cao khung nhóm bằng pointer/phím, giới hạn kích thước, lưu local và hủy thao tác
@@ -218,8 +222,6 @@ FE/N3/src/
 │   │   └── SearchModal.tsx  # Tìm nhanh nội dung tích hợp và điều hướng tới kết quả
 │   ├── settings/  # Cài đặt
 │   │   └── SettingsPage.tsx  # Cấu hình giao diện, audio/furigana/FSRS, dữ liệu và trạng thái đồng bộ
-│   ├── srs/  # Màn hình SRS còn trong source, chưa gắn route hiện tại
-│   │   └── SRSPage.tsx  # Màn hình ôn còn trong source; không phải route ôn hiện hành trong App
 │   ├── ui/  # Thành phần UI dùng chung
 │   │   ├── AppDialog.tsx  # Dialog chung cho tương tác ứng dụng
 │   │   ├── AppLoading.tsx  # Loading dùng chung, hỗ trợ toàn màn hình
@@ -234,6 +236,9 @@ FE/N3/src/
 │   ├── useCardAudio.ts  # Phát âm tự động qua browser speech synthesis và hủy khi đổi/unmount
 │   ├── useCardNotes.ts  # Tạo notes store có/không API; lifecycle, retry online/focus/60 giây
 │   ├── useLearningSync.ts  # Tải/sửa snapshot có revision, dirty queue, debounce, retry và conflict backup
+│   ├── useDeckWidgetStyles.ts  # Đọc/ghi style widget nhóm vào storage, chuẩn hóa và dọn id không còn
+│   ├── useReviewOutbox.ts  # Nối outbox lượt ôn với API (batch built-in, review thẻ cá nhân, undo) và vòng gửi lại
+│   ├── useReviewTiming.ts  # Đo thời gian nhớ/quyết định theo thẻ, tạm dừng khi ẩn tab hoặc mất focus
 │   └── useSettingsSync.ts  # GET settings, local-first update, pending PATCH tuần tự và tránh response cũ ghi đè
 ├── lib/  # F3/F4 — Nghiệp vụ, API, storage và adapters
 │   ├── dictionary/  # Client API và draft của từ điển
@@ -251,6 +256,7 @@ FE/N3/src/
 │   ├── deckCatalog.ts  # Xây danh mục bộ tích hợp theo level, bộ saved và summary
 │   ├── deckSchedule.ts  # Xây scheduled queue/count theo due, trạng thái, thẻ mới/ngày
 │   ├── deckSharing.ts  # Kiểu và client preview/copy/status/revoke deck/group, tách public request khỏi auth
+│   ├── deckWidgets.ts  # Kiểu, màu và chuẩn hóa style widget nhóm bộ thẻ
 │   ├── fsrsProgress.ts  # Adapter ts-fsrs, chuyển legacy, tính lịch tích hợp và preview interval
 │   ├── furigana.ts  # Parse/chuẩn hóa furigana, reading và bracket syntax; trả segment/warning
 │   ├── grammarData.ts  # Chuẩn hóa ngữ pháp, ví dụ, reading và thông tin cách dùng từ schema nguồn
@@ -263,6 +269,9 @@ FE/N3/src/
 │   ├── n5Decks.ts  # Tải và chuyển JSON N5 thành các bộ/thẻ dùng chung
 │   ├── navigation.ts  # Page ID ↔ canonical route, chuyển route cũ và resolve trang khởi đầu
 │   ├── quiz.ts  # Sinh quiz vocabulary/Kanji, chọn đáp án nhiễu và shuffle
+│   ├── reviewOutbox.ts  # Outbox bền vững cho lượt ôn: enqueue, claim, gửi theo lô, hoàn tác, projectedReview
+│   ├── reviewSnapshot.ts  # Gộp 3 chiều (local/base/remote) sau khi server xác nhận lượt ôn
+│   ├── reviewTiming.ts  # Bộ đếm thời gian ôn (recall/decision), hợp lệ khi không ẩn tab hay đổi giờ
 │   ├── srs.ts  # Facade tạo/ôn SRS, due queue, forecast/distribution và format ngày/khoảng ôn
 │   ├── storage.ts  # Learning storage có namespace, settings/SRS/bookmark/studyDays/resume/theme/reset và thông báo lỗi quota
 │   ├── studyMetrics.ts  # Phân biệt số lượt xem học tự do với số lượt ôn/chỉ số kết quả
@@ -297,6 +306,8 @@ BE/japanese-server/src/main/java/com/japaneselearning/japanese_learning_api/
 │   ├── AnkiController.java  # Endpoint due queue, progress cả bộ và review
 │   ├── AnkiDtos.java  # DTO queue/progress/rating/review request/response
 │   ├── AnkiScheduler.java  # Adapter Java FSRS, settings retention/steps, state và interval/lapses
+│   ├── ReviewSchedulingTime.java  # Chọn thời điểm tính lịch: ratedAt hợp lệ của client, nếu không dùng giờ server nhận
+│   ├── ReviewTiming.java  # Kiểm tra và chuẩn hóa dữ liệu thời gian ôn (recall/decision, hợp lệ)
 │   └── AnkiService.java  # Queue due/new allowance, khóa review, receipt clientReviewId, lưu progress/log
 ├── auth/  # B1/B2/B5 — API tài khoản, tokens và DTO
 │   ├── AuthController.java  # HTTP register/login/refresh/logout/me
@@ -337,10 +348,12 @@ BE/japanese-server/src/main/java/com/japaneselearning/japanese_learning_api/
 │   ├── JapaneseDeinflector.java  # Sinh ứng viên từ dạng chia, giới hạn lớp biến đổi và POS
 │   └── JmdictReader.java  # Đọc XML JMdict thành entry/forms/readings/senses; bảo vệ external entity
 ├── learning/  # B1/B2/B4/B5 — Đồng bộ snapshot và chuyển guest
-│   ├── LearningController.java  # GET/PUT learning và POST guest transfer
+│   ├── BuiltInReviewLog.java  # Entity log lượt ôn thẻ tích hợp: request id, before/result card, telemetry, undoneAt
+│   ├── BuiltInSchedulerAdapter.java  # Chuyển SrsCard của snapshot ↔ AnkiCardProgress để dùng chung AnkiScheduler
+│   ├── LearningController.java  # GET/PUT learning, review đơn/lô thẻ tích hợp, undo và POST guest transfer
 │   ├── LearningDtos.java  # DTO bookmark/SRS/StudyDay/snapshot/transfer và constraints
 │   ├── LearningReceipt.java  # Entity receipt migration theo user/request key/fingerprint
-│   ├── LearningService.java  # Owner lock, revision check, snapshot JSON, validate và hợp nhất guest một lần
+│   ├── LearningService.java  # Owner lock, revision check, snapshot JSON, review idempotent (đơn/lô, khóa theo expectedRepetitions), undo, validate và hợp nhất guest một lần
 │   └── LearningState.java  # Entity một snapshot/revision trên user
 ├── model/  # B4 — Entity nghiệp vụ và enums
 │   ├── AnkiCardProgress.java  # Entity progress thẻ cá nhân gồm FSRS và review counters
@@ -449,8 +462,8 @@ Khi tìm một chức năng, đọc cây theo **tính năng → controller/compo
 | Tài khoản | Form, khôi phục phiên, trạng thái guest/auth, xử lý response cũ | Đăng ký/đăng nhập, BCrypt, cấp/đổi/thu hồi token | `app_users`, `refresh_tokens`; token ở browser |
 | Thư viện tích hợp | Tải JSON, chuẩn hóa schema, lọc và hiển thị | Không có API CMS quản lý thư viện tích hợp | `FE/N3/public/data` |
 | Học tự do | Chọn bộ/bài, lật thẻ, phát âm, tiếp tục vị trí | Cấp dữ liệu nếu là bộ cá nhân | Local vị trí học; thẻ cá nhân ở DB |
-| Ôn tích hợp | Tính FSRS, hàng đợi, lưu local và đồng bộ snapshot | Lưu snapshot có revision | Browser + `learning_states` |
-| Ôn bộ cá nhân | Lấy queue, gửi rating và `clientReviewId` | Tính FSRS chính thức, lưu progress/review log | `anki_card_progress`, `anki_review_logs` |
+| Ôn tích hợp | Chấm lạc quan bằng FSRS, hàng đợi, outbox lượt ôn bền vững, hoàn tác | Tính FSRS chính thức, lưu log lượt ôn và snapshot có revision | Browser + `learning_states`, `builtin_review_logs` |
+| Ôn bộ cá nhân | Lấy queue, gửi rating, `clientReviewId` và dữ liệu thời gian qua outbox, hoàn tác | Tính FSRS chính thức, lưu progress/review log | `anki_card_progress`, `anki_review_logs` |
 | Import | Đọc file trong worker, mapping, preview, định dạng | Kiểm tra DTO, hạn mức, quyền và tạo atomically | `decks`, `cards` |
 | Quản lý bộ/thẻ | CRUD UI, lọc, phân trang, template | CRUD, move/reorder, soft delete, owner lock | `decks`, `cards` |
 | Nhóm bộ thẻ | Tạo/đổi tên/di chuyển/sắp xếp nhóm | Version, quyền sở hữu, giải tán nhóm | `deck_groups`, `decks.group_id` |
@@ -500,7 +513,7 @@ Khi tìm một chức năng, đọc cây theo **tính năng → controller/compo
 
 Đăng nhập không có route `/login` độc lập trong `App.tsx`: `AuthPage`/`AuthDialog` được chọn qua auth state. Phần lớn trang học lazy-load qua Suspense. Từ điển được phép mở độc lập, không đợi toàn bộ thư viện học tải xong.
 
-`SRSPage.tsx` vẫn tồn tại trong source nhưng không được gắn vào route hiện tại. Đường ôn hiện tại đi qua `/review` và `UnifiedDeckPage`; không nên gọi mọi file còn tồn tại là luồng đang sử dụng.
+`SRSPage.tsx` và phần phiên học cũ trong `FlashcardPage.tsx` (VocabFlashcardSession, GrammarFlashcardSession và các control đi kèm) đã được xóa vì không còn nơi nào import. Đường ôn hiện tại đi qua `/review` và `UnifiedDeckPage` → `StudySession`.
 
 ### 4.3. Mô hình dữ liệu dùng chung
 
@@ -570,9 +583,11 @@ Các mutation thư viện/từ điển có owner lock để tuần tự hóa ghi
 
 ### 5.2. FSRS và hai nguồn lịch ôn
 
-**Thẻ tích hợp:** FE dùng `ts-fsrs`, đổi kết quả sang `SRSCard`, ghi local rồi gửi learning snapshot. BE nhận và kiểm tra cấu trúc snapshot; không tính lại mỗi lượt ôn tích hợp.
+**Thẻ tích hợp:** FE vẫn dùng `ts-fsrs` để chấm lạc quan và hiển thị khoảng lịch, rồi đưa lượt ôn vào outbox bền vững (`review_outbox_v1`). Outbox gửi theo lô tối đa 20 lượt tới `/users/me/learning/reviews/batch`; **BE tính lịch chính thức** qua `AnkiScheduler` (qua `BuiltInSchedulerAdapter`), ghi `builtin_review_logs` và cập nhật snapshot trong một transaction. Mỗi lượt có `clientReviewId` bất biến nên gửi lại là idempotent; `expectedRepetitions` lệch thì trả 409 để tránh áp hai đánh giá lên một phiên bản thẻ. `ReviewSchedulingTime` dùng `ratedAt` của client khi hợp lệ (không quá 30 giây ở tương lai, không quá 30 ngày trước, không trước lượt ôn trước) để lượt ôn bị trễ mạng không bị lùi lịch.
 
-**Thẻ cá nhân:** FE gửi `AGAIN/HARD/GOOD/EASY`, `clientReviewId` và response time; BE đọc tiến độ/settings, tính lịch qua `AnkiScheduler`, lưu progress và log trong transaction, trả kết quả cho FE. Server là nguồn xác nhận lịch của bộ cá nhân.
+**Thẻ cá nhân:** FE gửi `AGAIN/HARD/GOOD/EASY`, `clientReviewId`, response time và dữ liệu thời gian (recall/decision) qua cùng outbox; BE đọc tiến độ/settings, tính lịch qua `AnkiScheduler`, lưu progress và log trong transaction, trả kết quả cho FE. Server là nguồn xác nhận lịch của bộ cá nhân.
+
+**Hoàn tác:** cả hai đường đều có undo theo `clientReviewId` (`POST /users/me/learning/reviews/{id}/undo`, `POST /anki/cards/{cardId}/reviews/{id}/undo`). BE lưu trạng thái trước (`before_card` / `before_progress`) và từ chối nếu thẻ đã có lượt ôn mới hơn (409). Log cũ trước V16 không có trạng thái trước nên trả 409 "Lượt ôn cũ không hỗ trợ hoàn tác".
 
 State chung: `NEW → LEARNING → REVIEW`; quên khi đang REVIEW có thể sang `RELEARNING`. Progress gồm stability, difficulty, elapsed/scheduled days, learning step, due date, repetitions/lapses, first/last review và rating cuối. `easeFactor` còn được giữ để tương thích; không phải toàn bộ thuật toán hiện tại là SM-2.
 
@@ -602,9 +617,10 @@ Production/local cấu hình MySQL; nhiều integration test dùng H2 MySQL mode
 | `decks` | Owner, nội dung mô tả, source/import metadata, template JSON, position, card_count, group, deletedAt, version, share token/consent |
 | `cards` | Deck, front/back/reading/source notes, kind, position, extra_data JSON, nguồn import, deletedAt/version, dictionary identity/provenance |
 | `anki_card_progress` | Unique `(user_id,card_id)`, due/state, thông số FSRS, số lần ôn/quên |
-| `anki_review_logs` | Rating, state/interval trước-sau, response time, client_review_id, result_progress để replay |
+| `anki_review_logs` | Rating, state/interval trước-sau, response time, client_review_id, result_progress để replay; V14–V16 thêm thời gian recall/decision, predicted_recall, scheduler_version, before_progress, undone_at |
 | `learning_states` | Một snapshot JSON dạng longtext và revision trên user |
 | `learning_migration_receipts` | Request key/fingerprint/result cho chuyển guest đúng một lần |
+| `builtin_review_logs` | Log lượt ôn thẻ tích hợp: unique `(user_id,request_id)`, rating, before_card/result_card, telemetry, undone_at; index lịch sử theo thẻ |
 | `deck_groups` | Owner, name, position, version, share token, import key cho bản sao nhóm |
 | `dictionary_datasets` | Version/checksum id, status, entry count, import time và source URL |
 | `dictionary_catalog` | Con trỏ dataset đang phục vụ; quan hệ logic, migration không khai báo FK |
@@ -652,6 +668,9 @@ Sơ đồ trên thể hiện quan hệ dữ liệu nghiệp vụ chính. Ghi ch�
 | V11 | Dictionary tables và identity/provenance thẻ |
 | V12 | Share token và import key nhóm |
 | V13 | Ghi chú cá nhân và consent chia sẻ note cho deck/group |
+| V14 | Cột thời gian ôn (recall/decision, shown/revealed/rated), predicted_recall, elapsed_days, scheduler_version cho `anki_review_logs` |
+| V15 | Bảng `builtin_review_logs` cho lượt ôn thẻ tích hợp |
+| V16 | Hoàn tác lượt ôn: before_card, before_progress, progress_existed, undone_at |
 
 Index quan trọng: email/token hash unique; progress `(user,card)` unique; due lookup; card active order; deck owner/group/position; review `(user,clientReviewId)` unique; dictionary exact/prefix/token; import keys và share tokens. `card_count` là số đếm lưu sẵn, mọi writer phải phối hợp cập nhật đúng.
 
@@ -707,9 +726,13 @@ Tất cả endpoint ở bảng này cần JWT. Page response: `{content,totalEle
 |---|---|---|
 | GET | `/anki/due?deckId=...&limit=50` | Thẻ due + allowance thẻ mới; deckId tùy chọn, limit 1–200 |
 | GET | `/anki/decks/{deckId}/cards` | Dữ liệu thẻ + progress cả bộ, đường tương thích cũ |
-| POST | `/anki/cards/{cardId}/reviews` | `{rating,clientReviewId,responseTimeMs}`; trả progress do BE tính |
+| POST | `/anki/cards/{cardId}/reviews` | `{rating,clientReviewId,responseTimeMs,expectedRepetitions,…thời gian}`; trả progress do BE tính |
+| POST | `/anki/cards/{cardId}/reviews/{clientReviewId}/undo` | Hoàn tác lượt ôn thẻ cá nhân; 409 nếu thẻ đã đổi |
 | GET | `/users/me/learning` | Snapshot và revision |
 | PUT | `/users/me/learning` | `{revision,bookmarks,srsCards,studyDays}`; revision cũ → 409 |
+| POST | `/users/me/learning/reviews` | `{cardId,deckType,review}`; ôn một thẻ tích hợp, BE tính FSRS, idempotent theo `clientReviewId` |
+| POST | `/users/me/learning/reviews/batch` | 1–20 lượt ôn thẻ tích hợp theo thứ tự; trả snapshot và danh sách thẻ; lỗi một lượt hủy cả lô |
+| POST | `/users/me/learning/reviews/{clientReviewId}/undo` | Hoàn tác lượt ôn thẻ tích hợp; 409 nếu thẻ đã đổi hoặc log cũ không hỗ trợ |
 | POST | `/users/me/learning/guest` | Gộp guest/legacy có `idempotencyKey` trong body |
 | GET | `/card-notes/{key}` | Note account; chưa có trả version 0; no-store |
 | PUT | `/card-notes/{key}` | `{text,version}`; lưu ghi chú riêng, conflict → 409 |
@@ -793,11 +816,11 @@ ImportSizeFilter áp dụng **JSON POST `/decks` và `/decks/import`**: raw file
 4. Nếu đã xử lý, trả progress lưu trong log; nếu mới, tính FSRS và lưu progress/log cùng transaction.
 5. FE áp dụng lịch trả về, cập nhật queue. Không tự xem kết quả dự kiến FE là lịch cuối cùng của BE, nhất là khi fuzzing bật.
 
-Học tự do chỉ ghi lượt xem/thời gian và resume; không tự tăng “đã nhớ”, accuracy hoặc đổi lịch FSRS. Xem điểm lệch `flashcardViewed` ở mục 11.
+Học tự do chỉ ghi lượt xem/thời gian (`flashcardViewed` trong StudyDay, đã được BE giữ lại) và resume; không tự tăng “đã nhớ”, accuracy hoặc đổi lịch FSRS.
 
 ### 8.4. Đồng bộ tiến độ tích hợp và chuyển guest
 
-Learning sync tải snapshot server và revision. Thay đổi local đánh dirty; debounce 5 giây, max wait 30 giây; PUT tuần tự để tránh tự đua ghi. Dữ liệu pending còn trong local nếu mất mạng. Revision khác trả 409; không tự cộng hai snapshot tài khoản vì có thể nhân đôi hoạt động.
+Learning sync tải snapshot server và revision. Thay đổi local đánh dirty; debounce 5 giây, max wait 30 giây; PUT tuần tự để tránh tự đua ghi. Dữ liệu pending còn trong local nếu mất mạng. Revision khác trả 409; không tự cộng hai snapshot tài khoản vì có thể nhân đôi hoạt động. Khi outbox lượt ôn còn mục chưa gửi hoặc đang hoàn tác, `flush` snapshot tạm hoãn; sau khi BE xác nhận lượt ôn, `mergeReviewSnapshot` gộp 3 chiều (local, base, remote) để giữ thay đổi chưa gửi và công việc từ thiết bị khác.
 
 Khi chọn dùng bản server, FE giữ bản chưa gửi vào conflict backup trước áp dụng. Chuyển guest dùng key SHA-256 theo account/nguồn/payload và receipt BE: bookmark hợp nhất theo loại+ID; SRS trùng giữ bản server; ngày học cộng một lần, accuracy tính theo trọng số lượt. Chỉ dọn nguồn đã xác nhận sau thành công. Settings và lịch sử nghe không thuộc learning transfer này; personal notes có UI transfer riêng.
 
@@ -826,7 +849,7 @@ Tab JLPT dùng 12 bài luyện N4/N3/N2 và 24 câu hỏi tự biên soạn theo
 - API stateless; JWT bearer trong Authorization, CSRF tắt theo cơ chế bearer hiện tại.
 - Password BCrypt cost 12; refresh token random 32 bytes, DB chỉ giữ SHA-256 hash.
 - Access token mặc định 15 phút; refresh mặc định 30 ngày và rotation/revoke.
-- CORS danh sách origin; chế độ `*` dùng allowedOriginPatterns và tắt credentialed CORS.
+- CORS danh sách origin; chế độ `*` dùng allowedOriginPatterns và tắt credentialed CORS; preflight được cache 1 giờ (`maxAge`) để FE khác origin không phải gửi `OPTIONS` trước mỗi request.
 - Owner checks trong service/query; deck/card soft delete phải được kiểm tra trước học/sửa/copy.
 - Constraint unique, transaction, owner/card locks, version/revision và receipt idempotency.
 - Input validation ở DTO, giới hạn import body, parser rich text có allowlist.
@@ -838,7 +861,7 @@ Tab JLPT dùng 12 bài luyện N4/N3/N2 và 24 câu hỏi tự biên soạn theo
 
 Token FE đang ở localStorage, không phải refresh cookie HttpOnly. XSS hoặc script cùng origin bị xâm nhập có thể đọc token; renderer an toàn và CSP là lớp giảm rủi ro, không xóa ranh giới này. Nginx có CSP nhưng `vercel.json` không có cùng cấu hình header; không coi header của Nginx là bảo đảm cho mọi cách deploy.
 
-Schema có role ADMIN và status LOCKED/DISABLED, nhưng không có module quản trị đầy đủ hoặc API admin trong source được khảo sát. Login kiểm tra ACTIVE; refresh và JWT filter hiện chưa thể hiện cùng kiểm tra status tài khoản. Logout thu hồi refresh của thiết bị, access token đã cấp vẫn sống tới expiry vì không có blacklist trong đường JWT hiện tại.
+Schema có role ADMIN và status LOCKED/DISABLED, nhưng không có module quản trị đầy đủ hoặc API admin trong source được khảo sát. `login`, `refresh` và `/auth/me` kiểm tra ACTIVE. JWT filter vẫn chỉ parse claim, không truy vấn DB: access token đã cấp cho tài khoản vừa bị khóa còn dùng được tới khi hết hạn (mặc định 15 phút), nhưng không gia hạn được. Logout thu hồi refresh của thiết bị; không có blacklist access token.
 
 Không thấy rate limiter, email verification flow, password reset, token/session cleanup scheduler, metrics/Actuator hoặc job backup DB trong mã ứng dụng này. Đây là phần cần bổ sung nếu yêu cầu vận hành cần đến, không phải khẳng định hạ tầng bên ngoài không có các cơ chế đó.
 
@@ -856,6 +879,7 @@ Không thấy rate limiter, email verification flow, password reset, token/sessi
 | `JWT_REFRESH_DAYS` | TTL refresh, mặc định 30 | Có rotation |
 | `CORS_ALLOWED_ORIGINS` | Một hoặc nhiều origin, phân cách dấu phẩy | Local cho 5173; production đặt domain cụ thể |
 | `PORT` | HTTP BE, mặc định 8080 | Nền tảng có thể cấp port khác |
+| `SERVER_COMPRESSION_ENABLED` | Nén gzip phản hồi `application/json` từ 2 KB, mặc định bật | Snapshot học ~1,4 MB nén còn khoảng 7%; proxy phía trước đã nén thì có thể tắt |
 | `app.dictionary.enabled` | Bật controller từ điển | Mặc định bật |
 | `app.dictionary.cards-enabled` | Cho phép write từ điển | Có thể tắt write giữ read |
 | `springdoc.api-docs.enabled`, `springdoc.swagger-ui.enabled` | API docs | Mặc định có public docs trong security config |
@@ -906,10 +930,10 @@ BE Dockerfile multi-stage JDK21→JRE21, Maven package `-DskipTests`, chạy `ja
 
 | Kiểm tra | Kết quả | Giới hạn |
 |---|---|---|
-| FE `npm.cmd test` | **101/101 pass**, 0 fail/skip | Unit tests theo `tests/*.test.mjs` |
-| FE `npm.cmd run lint` | Exit 0, có warnings | Fast Refresh mixed exports, regex escape thừa và unused catch trong `.agents` |
+| FE `npm test` | **129/129 pass**, 0 fail/skip | Unit tests theo `tests/*.test.mjs`; chạy lại ngày 17/10/2026 sau khi xóa mã chết |
+| FE `npm run lint` | 0 lỗi, có warnings | Fast Refresh mixed exports và unused catch trong `.agents`; `tsc -b` sạch. Chưa chạy lại `vite build` ngày 17/10 |
 | FE `npm.cmd run build` | **Thành công** sau chạy ngoài sandbox | Lần sandbox bị EPERM realpath worker/Draco, không phải TypeScript error; có chunk warning >500 kB |
-| BE `mvnw.cmd test` | **BUILD SUCCESS: 55 test, 53 pass, 2 skip, 0 fail/error** | Chạy bằng JDK 21.0.7 ngoài sandbox; hai test cần `sharing.mysql.url` bị skip |
+| BE `mvnw test` | **BUILD SUCCESS: 84 test, 82 pass, 2 skip, 0 fail/error** | Chạy ngày 17/10/2026 bằng JDK 21 (Homebrew) trên macOS; hai test cần `sharing.mysql.url` bị skip. Chạy trên H2 |
 | Browser E2E/MySQL thật/full dictionary corpus | Chưa chạy trong phiên này | Không suy ra đã pass từ sự tồn tại test/report cũ |
 | Deploy production | Chưa kiểm tra | Không có truy cập/hạ tầng production trong phạm vi yêu cầu |
 
@@ -921,13 +945,13 @@ Lần chạy BE đầu không khởi động vì `JAVA_HOME` sai. Đã chọn JD
 
 | Ưu tiên | Phát hiện và bằng chứng | Ảnh hưởng / hướng xử lý |
 |---|---|---|
-| Cao | FE `storage.ts::recordFreeStudyActivity` lưu `flashcardViewed`, kiểu StudyDay FE có trường này; BE `LearningDtos.StudyDay` không có nó | Hợp đồng sync chưa giữ chỉ số xem thẻ tự do. Khi round-trip qua server có thể mất trường hoặc request bị từ chối tùy cấu hình Jackson. Bổ sung DTO/merge/validation và test round-trip trước coi metric này đã sync |
-| Cao | `AuthService.login` kiểm tra ACTIVE; `refresh` không kiểm tra status user; JWT filter chỉ parse claim | Khóa/disable tài khoản chưa có đường chặn đồng nhất trong refresh/access. Cần bổ sung protocol status/revocation và test; chưa xác minh khai thác runtime trong phiên này |
+| ~~Cao~~ Đã sửa | `StudyDay` BE thiếu `flashcardViewed` (FE `storage.ts::recordFreeStudyActivity` có ghi) | Đã thêm `Integer flashcardViewed` (nullable, tương thích dữ liệu cũ) vào `LearningDtos.StudyDay` và cộng dồn trong `LearningService.mergeDays`; có test round-trip và merge guest |
+| ~~Cao~~ Đã sửa một phần | `refresh` và `/auth/me` trước đây không kiểm tra status | Hai đường này nay trả 401 với tài khoản LOCKED/DISABLED, token refresh không bị tiêu thụ; có test. Còn lại: access token đã cấp sống tới hết hạn vì JWT filter không truy vấn DB (chủ ý giữ nguyên) |
 | Vừa | `RefreshTokenRepository.findByTokenHash` không có khóa; refresh entity không có protocol khóa thể hiện tại read | Hai tab/thiết bị refresh đồng thời cùng token có khả năng đều tạo token mới. Single-flight FE chỉ trong cùng JS context; cần test race và khóa/CAS server |
 | Vừa | `useLearningSync` đặt `conflict=true` cho mọi exception load/flush | UI có thể xem lỗi mạng như xung đột dữ liệu; nên phân biệt offline/timeout với HTTP 409 và chọn hành động phù hợp |
 | Vừa | `AuthProvider` còn comment nói chờ sync API, trong khi LearningSyncPanel/API đã có | Comment cũ gây hiểu sai kiến trúc; cập nhật comment và dùng code hiện hành làm nguồn chính |
 | Vừa | `docs/anki-import.md` ghi preview tối đa 10, test `importSummary.test.mjs` kiểm tra tối đa 3 | Tài liệu hành vi preview chưa đồng nhất; xác nhận UI path rồi cập nhật số liệu mô tả |
-| Vừa | `ankiStorage.ts` và full-deck endpoints còn tải toàn bộ deck/progress; `SRSPage.tsx` không route | Có mã tương thích/đường cũ; tránh dùng lại ở màn hình scale lớn, kiểm tra caller trước dọn |
+| Vừa | `ankiStorage.ts` và full-deck endpoints còn tải toàn bộ deck/progress; `SRSPage.tsx` đã bị xóa | Có mã tương thích/đường cũ; tránh dùng lại ở màn hình scale lớn, kiểm tra caller trước dọn |
 | Vừa | `user_settings` PATCH chưa có revision kiểu learning snapshot | Nhiều thiết bị cùng sửa một field có thể last-write-wins; FE queue chỉ giải quyết request của chính phiên |
 | Vừa | Reset local trong `storage.ts` không liệt kê key personal note/draft | Reset dữ liệu học không đồng nghĩa xóa ghi chú. Phải diễn đạt đúng trong UI/hướng dẫn và kiểm thử theo yêu cầu sản phẩm |
 | Vừa | Nginx CSP, Vercel rewrite và full-stack Compose chưa đồng bộ | Cần chọn kiến trúc deploy cụ thể và kiểm tra API connectivity/CSP/deep link trước phát hành |
@@ -968,6 +992,9 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `hooks/useLearningSync.ts` | Tải/sửa snapshot có revision, dirty queue, debounce, retry và conflict backup |
 | `hooks/useSettingsSync.ts` | GET settings, local-first update, pending PATCH tuần tự và tránh response cũ ghi đè |
 | `hooks/useCardNotes.ts` | Tạo notes store có/không API; lifecycle, retry online/focus/60 giây |
+| `hooks/useDeckWidgetStyles.ts` | Đọc/ghi style widget nhóm vào storage, chuẩn hóa và dọn id không còn |
+| `hooks/useReviewOutbox.ts` | Nối outbox lượt ôn với API (batch built-in, review thẻ cá nhân, undo) và vòng gửi lại |
+| `hooks/useReviewTiming.ts` | Đo thời gian nhớ/quyết định theo thẻ, tạm dừng khi ẩn tab hoặc mất focus |
 | `hooks/useCardAudio.ts` | Phát âm tự động qua browser speech synthesis và hủy khi đổi/unmount |
 | `hooks/useActiveElapsedMinutes.ts` | Đo thời gian hoạt động, timer phiên Anki và format thời gian |
 
@@ -995,15 +1022,19 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `lib/srs.ts` | Facade tạo/ôn SRS, due queue, forecast/distribution và format ngày/khoảng ôn |
 | `lib/fsrsProgress.ts` | Adapter ts-fsrs, chuyển legacy, tính lịch tích hợp và preview interval |
 | `lib/storage.ts` | Learning storage có namespace, settings/SRS/bookmark/studyDays/resume/theme/reset và thông báo lỗi quota |
-| `lib/learningSync.ts` | Kiểu snapshot/report, API learning và stable migration key SHA-256 |
+| `lib/learningSync.ts` | Kiểu snapshot/report, API learning (PUT, review, batch, undo) và stable migration key SHA-256 |
 | `lib/guestSession.ts` | Đọc/ghi cờ guest của browser session |
 | `lib/navigation.ts` | Page ID ↔ canonical route, chuyển route cũ và resolve trang khởi đầu |
 | `lib/quiz.ts` | Sinh quiz vocabulary/Kanji, chọn đáp án nhiễu và shuffle |
+| `lib/reviewOutbox.ts` | Outbox bền vững cho lượt ôn: enqueue, claim, gửi theo lô, hoàn tác, projectedReview |
+| `lib/reviewSnapshot.ts` | Gộp 3 chiều (local/base/remote) sau khi server xác nhận lượt ôn |
+| `lib/reviewTiming.ts` | Bộ đếm thời gian ôn (recall/decision), hợp lệ khi không ẩn tab hay đổi giờ |
 | `lib/furigana.ts` | Parse/chuẩn hóa furigana, reading và bracket syntax; trả segment/warning |
 | `lib/cardAppearance.ts` | Tạo draft appearance, phát hiện style riêng hai mặt và sao chép style một mặt sang mặt kia |
 | `lib/cardFormatting.ts` | Parse rich text có allowlist tag/style, lọc nội dung nguy hiểm |
 | `lib/cardNotes.ts` | Note key, local/draft/dirty store, save/retry/conflict và export có consent |
 | `lib/deckSharing.ts` | Kiểu và client preview/copy/status/revoke deck/group, tách public request khỏi auth |
+| `lib/deckWidgets.ts` | Kiểu, màu và chuẩn hóa style widget nhóm bộ thẻ |
 | `lib/dictionary/api.ts` | Dictionary types, public GET, romaji kana, picker/add/create và chọn form/reading/sense hợp lệ |
 | `lib/dictionary/draft.ts` | Lưu/khôi phục/validate bản nháp thêm từ trong sessionStorage |
 | `lib/utils.ts` | Hàm `cn` kết hợp clsx và tailwind-merge để ghép class |
@@ -1040,7 +1071,6 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `components/listening/ListeningPage.tsx` | Catalogue podcast, filter, stream, trạng thái local và tab JLPT |
 | `components/listening/JlptListeningPractice.tsx` | Phiên nghe trắc nghiệm, nộp bài, giải thích/dịch và lưu điểm tốt nhất |
 | `components/listening/examData.ts` | Đề, lựa chọn, đáp án, transcript/dịch và tham chiếu audio bài luyện |
-| `components/srs/SRSPage.tsx` | Màn hình ôn còn trong source; không phải route ôn hiện hành trong App |
 | `components/dictionary/DictionaryPage.tsx` | Tìm từ, phân trang cursor, entry detail và trạng thái dataset |
 | `components/dictionary/AddDictionaryCardDialog.tsx` | Chọn written/reading/sense, deck, preview thẻ và lưu idempotent |
 | `components/dictionary/dictionary.css` | Style dictionary và dialog thêm từ |
@@ -1048,12 +1078,16 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `components/ui/AppDialog.tsx` | Dialog chung cho tương tác ứng dụng |
 | `components/ui/OverflowMenu.tsx` | Menu tác vụ phụ/overflow |
 | `components/ui/StudyUI.tsx` | Các primitive UI phục vụ học và quản lý bộ |
-| `components/flashcard/FlashcardPage.tsx` | Export page free/scheduled qua UnifiedDeckPage; chứa thêm helper/session code cũ |
+| `components/flashcard/FlashcardPage.tsx` | FlashcardPage/AnkiPage mỏng bọc UnifiedDeckPage (free/scheduled) và helper speakJapanese |
 | `components/flashcard/UnifiedDeckPage.tsx` | Hợp nhất danh mục tích hợp/cá nhân/saved cho mode free hoặc scheduled |
 | `components/flashcard/ImportedDecks.tsx` | Quản lý bộ cá nhân, import/tạo/sửa, phân trang cards, mở học và nhóm |
-| `components/flashcard/StudySession.tsx` | Phiên học chung: lật thẻ, rating, queue/timer, audio, ghi metric và sửa thẻ phù hợp |
+| `components/flashcard/StudySession.tsx` | Phiên học chung: lật thẻ, rating, queue, enqueue lượt ôn vào outbox, hoàn tác (Backspace), audio, ghi metric và sửa thẻ |
+| `components/flashcard/studySession.css` | Style phiên học |
+| `components/flashcard/StudyClock.tsx` | Đồng hồ thời gian học hiển thị, tạm dừng khi ẩn tab hoặc mở hộp thoại |
 | `components/flashcard/StudySetupSheet.tsx` | Chọn bài/options trước phiên học tự do |
 | `components/flashcard/DeckCard.tsx` | Card danh mục bộ, summary, metric và CTA |
+| `components/flashcard/deckCard.css` | Style card bộ thẻ |
+| `components/flashcard/DeckWidgetCustomize.tsx` | Bảng tùy chỉnh widget nhóm (kích thước, màu, độ mờ), không modal |
 | `components/flashcard/DeckGrid.tsx` | Bố cục responsive danh sách bộ |
 | `components/flashcard/CardPresentation.tsx` | Renderer hai mặt và template/reading/examples/note của thẻ |
 | `components/flashcard/CardFields.tsx` | Trường nhập/sửa dữ liệu card dùng chung |
@@ -1146,12 +1180,16 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `deck/DeckGroupShareService.java` | Lọc thành viên IMPORT, metadata paging, hạn mức và copy nhóm riêng |
 | `deck/SharedDeckContent.java` | Lock owner có thứ tự, kiểm hạn mức, copy card/template/provenance và note có consent |
 | `anki/AnkiController.java` | Endpoint due queue, progress cả bộ và review |
-| `anki/AnkiService.java` | Queue due/new allowance, khóa review, receipt clientReviewId, lưu progress/log |
+| `anki/AnkiService.java` | Queue due/new allowance, khóa review, receipt clientReviewId, lưu progress/log kèm thời gian, undo |
 | `anki/AnkiScheduler.java` | Adapter Java FSRS, settings retention/steps, state và interval/lapses |
+| `anki/ReviewSchedulingTime.java` | Chọn thời điểm tính lịch: ratedAt hợp lệ của client, nếu không dùng giờ server nhận |
+| `anki/ReviewTiming.java` | Kiểm tra và chuẩn hóa dữ liệu thời gian ôn (recall/decision, hợp lệ) |
 | `anki/AnkiDtos.java` | DTO queue/progress/rating/review request/response |
-| `learning/LearningController.java` | GET/PUT learning và POST guest transfer |
-| `learning/LearningService.java` | Owner lock, revision check, snapshot JSON, validate và hợp nhất guest một lần |
-| `learning/LearningDtos.java` | DTO bookmark/SRS/StudyDay/snapshot/transfer và constraints |
+| `learning/BuiltInReviewLog.java` | Entity log lượt ôn thẻ tích hợp: request id, before/result card, telemetry, undoneAt |
+| `learning/BuiltInSchedulerAdapter.java` | Chuyển SrsCard của snapshot ↔ AnkiCardProgress để dùng chung AnkiScheduler |
+| `learning/LearningController.java` | GET/PUT learning, review đơn/lô thẻ tích hợp, undo và POST guest transfer |
+| `learning/LearningService.java` | Owner lock, revision check, snapshot JSON, review idempotent (đơn/lô, khóa theo expectedRepetitions), undo, validate và hợp nhất guest một lần |
+| `learning/LearningDtos.java` | DTO bookmark/SRS/StudyDay (có flashcardViewed)/snapshot/review/transfer và constraints |
 | `learning/LearningState.java` | Entity một snapshot/revision trên user |
 | `learning/LearningReceipt.java` | Entity receipt migration theo user/request key/fingerprint |
 | `notes/PersonalCardNoteController.java` | GET no-store và PUT note theo key/current owner |
@@ -1226,6 +1264,9 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `src/main/resources/db/migration/V11__dictionary.sql` | Dictionary schema và provenance card |
 | `src/main/resources/db/migration/V12__deck_group_sharing.sql` | Share/copy identity nhóm |
 | `src/main/resources/db/migration/V13__personal_card_notes.sql` | Note cá nhân và share consent |
+| `src/main/resources/db/migration/V14__review_timing.sql` | Cột thời gian ôn, predicted_recall, scheduler_version cho anki_review_logs |
+| `src/main/resources/db/migration/V15__builtin_review_logs.sql` | Bảng builtin_review_logs (log lượt ôn thẻ tích hợp) |
+| `src/main/resources/db/migration/V16__review_undo.sql` | Cột before_card/before_progress/undone_at để hoàn tác lượt ôn |
 | `database/create_database.sql` | Khởi tạo MySQL database/app user local |
 | `compose.yml` | MySQL8.4, port3306, volume và healthcheck |
 | `Dockerfile`, `.dockerignore` | Build/run BE image non-root, loại dữ liệu/secret khỏi context |
@@ -1235,13 +1276,17 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 | `src/test/resources/dictionary-fixture.xml` | Corpus JMdict nhỏ phục vụ integration test |
 | `src/test/java/.../JapaneseLearningApiApplicationTests.java` | Smoke/context test ứng dụng theo cấu hình test |
 | `src/test/java/.../anki/AnkiSchedulerTest.java` | Chuyển state và khoảng lịch FSRS |
-| `src/test/java/.../auth/AuthServiceIntegrationTest.java` | Register/login/settings/token auth nghiệp vụ |
+| `src/test/java/.../security/CorsPreflightIntegrationTest.java` | Preflight được trình duyệt cache 1 giờ (`Access-Control-Max-Age: 3600`), origin lạ vẫn bị từ chối |
+| `src/test/java/.../common/ResponseCompressionIntegrationTest.java` | Cổng thật: JSON lớn được gzip khi client yêu cầu, phản hồi nhỏ không nén, nội dung giải nén khớp bản gốc |
+| `src/test/java/.../anki/ReviewSchedulingTimeTest.java` | Chọn thời điểm tính lịch khi ratedAt lệch hoặc quá cũ |
+| `src/test/java/.../anki/ReviewTimingTest.java` | Hợp lệ hóa dữ liệu thời gian ôn |
+| `src/test/java/.../auth/AuthServiceIntegrationTest.java` | Register/login/settings/token auth nghiệp vụ; refresh và me từ chối tài khoản LOCKED/DISABLED |
 | `src/test/java/.../deck/DeckServiceIntegrationTest.java` | CRUD/group/paging/count/import/idempotency/queue/owner |
 | `src/test/java/.../deck/DeckShareIntegrationTest.java` | Preview giới hạn, owner/revoke, copy độc lập/retry/concurrency |
 | `src/test/java/.../deck/DeckGroupShareIntegrationTest.java` | Membership hiện tại, copy nhóm/limits/order và concurrency |
 | `src/test/java/.../dictionary/DictionaryIntegrationTest.java` | Import/XML/search/cursor/POS/version, rights/write retry/move/copy |
 | `src/test/java/.../dictionary/DictionarySearchCacheTest.java` | Cache TTL/bounds/coalescing và lỗi |
-| `src/test/java/.../learning/LearningServiceIntegrationTest.java` | Revision/validate/guest merge và migration receipts |
+| `src/test/java/.../learning/LearningServiceIntegrationTest.java` | Revision/validate/guest merge, migration receipts, review đơn/lô idempotent, undo và round-trip flashcardViewed |
 | `src/test/java/.../notes/PersonalCardNoteIntegrationTest.java` | Note version/privacy/length/isolation và share consent |
 | `src/test/java/.../notes/PersonalCardNoteMigrationTest.java` | Migration V13 và mặc định note sharing private |
 | `src/test/java/.../user/UserSettingsIntegrationTest.java` | Settings FSRS/furigana và validation |
@@ -1250,5 +1295,5 @@ Tài liệu nguồn chuyên đề nên đọc kèm: `FE/N3/docs/learning-sync.md
 
 ## 15. Phạm vi sử dụng tài liệu
 
-Danh mục bao phủ **105 file trong FE/src**, **70 file Java BE/main**, **13 migration**, cấu hình/runtime assets và hệ thống test chính. Các thư viện dependency, build output, snapshot data từng entry, binary GLB/audio và lịch sử Git không được giải thích từng byte/dòng. Tài liệu là bản đồ kiến trúc và chức năng để đọc/bảo trì hệ thống; không thay thế kiểm thử E2E trên môi trường triển khai hoặc audit bảo mật chuyên sâu.
+Danh mục bao phủ **115 file trong FE/src**, **74 file Java BE/main**, **16 migration**, cấu hình/runtime assets và hệ thống test chính. Các thư viện dependency, build output, snapshot data từng entry, binary GLB/audio và lịch sử Git không được giải thích từng byte/dòng. Tài liệu là bản đồ kiến trúc và chức năng để đọc/bảo trì hệ thống; không thay thế kiểm thử E2E trên môi trường triển khai hoặc audit bảo mật chuyên sâu.
 
