@@ -11,7 +11,9 @@ import java.util.*;
 
 @Service
 public class DeckGroupShareService {
-    public record Link(String token, int deckCount, int excludedDeckCount, long cardCount, boolean includePersonalNotes) {}
+    public record Link(String token, int deckCount, int excludedDeckCount, long cardCount, boolean includePersonalNotes, String code, java.time.Instant expiresAt) {
+        public Link(String token, int deckCount, int excludedDeckCount, long cardCount, boolean includePersonalNotes) { this(token, deckCount, excludedDeckCount, cardCount, includePersonalNotes, null, null); }
+    }
     public record PreviewDeck(UUID id, String name, String description, long cardCount) {}
     public record Preview(String name, String author, int deckCount, int excludedDeckCount, long cardCount,
                           int page, int size, int totalPages, List<PreviewDeck> decks) {}
@@ -43,7 +45,11 @@ public class DeckGroupShareService {
         em.refresh(group, LockModeType.PESSIMISTIC_WRITE);
         if (eligible(members(group)).isEmpty()) throw empty();
         if (group.getShareToken() == null) group.setShareToken(UUID.randomUUID().toString());
-        if (options != null) group.setSharePersonalNotes(options.includePersonalNotes());
+        if (group.getShareCode() == null) group.setShareCode(ShareCodes.generate(code -> decks.existsByShareCode(code) || groups.existsByShareCode(code)));
+        if (options != null) {
+            group.setSharePersonalNotes(options.includePersonalNotes());
+            if (!options.keepsExpiry()) group.setShareExpiresAt(ShareCodes.expiry(options.expiresInDays()));
+        } else if (ShareCodes.expired(group.getShareExpiresAt())) group.setShareExpiresAt(null);
         return link(group);
     }
     @Transactional
@@ -52,6 +58,8 @@ public class DeckGroupShareService {
         DeckGroup group = owned(userId, groupId);
         em.refresh(group, LockModeType.PESSIMISTIC_WRITE);
         group.setShareToken(null);
+        group.setShareCode(null);
+        group.setShareExpiresAt(null);
         group.setSharePersonalNotes(false);
     }
     @Transactional(readOnly = true)
@@ -83,7 +91,7 @@ public class DeckGroupShareService {
         // Owner locks coordinate membership/content changes and dissolution; refresh invalidates the initial snapshot.
         try { em.refresh(source, LockModeType.PESSIMISTIC_READ); }
         catch (EntityNotFoundException ex) { throw unavailable(); }
-        if (!token.equals(source.getShareToken())) throw unavailable();
+        if (!token.equals(source.getShareToken()) || ShareCodes.expired(source.getShareExpiresAt())) throw unavailable();
         var sourceDecks = eligible(decks.findGroupForShareCopy(sourceOwner, source.getId()));
         if (sourceOwner.equals(userId)) return new CopyResult(source.getId(), sourceDecks.stream().map(Deck::getId).toList(), true);
         String key = "share-group:" + source.getId();
@@ -118,7 +126,8 @@ public class DeckGroupShareService {
         var all = members(group);
         var included = eligible(all);
         return new Link(group.getShareToken(), included.size(), all.size() - included.size(),
-                counts(included).values().stream().mapToLong(Long::longValue).sum(), group.isSharePersonalNotes());
+                counts(included).values().stream().mapToLong(Long::longValue).sum(), group.isSharePersonalNotes(),
+                ShareCodes.display(group.getShareCode()), group.getShareExpiresAt());
     }
     private Map<UUID, Long> counts(List<Deck> included) {
         var counts = new HashMap<UUID, Long>();
@@ -137,7 +146,9 @@ public class DeckGroupShareService {
     }
     private DeckGroup shared(String token) {
         if (token == null || !token.matches("[0-9a-fA-F-]{36}")) throw unavailable();
-        return groups.findByShareToken(token).orElseThrow(this::unavailable);
+        DeckGroup group = groups.findByShareToken(token).orElseThrow(this::unavailable);
+        if (ShareCodes.expired(group.getShareExpiresAt())) throw unavailable();
+        return group;
     }
     private ApiException unavailable() { return ApiException.notFound("Liên kết không tồn tại hoặc đã ngừng chia sẻ."); }
     private ApiException empty() { return new ApiException(HttpStatus.BAD_REQUEST, "Nhóm chưa có bộ import để chia sẻ"); }

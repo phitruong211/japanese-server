@@ -35,6 +35,10 @@ public class Card {
     @Column(length = 30) private String source;
     @Column(name = "source_ref", length = 1000) private String sourceRef;
     @Column(name = "source_sheet") private String sourceSheet;
+    @Column(name = "note_type", length = 32) private String noteType;
+    /** Source of truth for cards made with note types; the front/back/reading/notes columns are derived from it. */
+    @JdbcTypeCode(SqlTypes.JSON) @Column(name = "field_values", columnDefinition = "json")
+    private Map<String, Object> fields;
     @Column(name = "dictionary_identity", length = 64) private String dictionaryIdentity;
     @Column(name = "dictionary_provenance", columnDefinition = "text") private String dictionaryProvenance;
     @Version private long version;

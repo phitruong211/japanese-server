@@ -19,7 +19,11 @@ public final class LearningDtos {
    this(cardId,deckType,state,easeFactor,intervalMinutes,intervalDays,dueDate,reps,lapses,lastReviewedAt,null,null,null,null,null,null,null,null);
   }
  }
- public record StudyDay(@NotNull @Pattern(regexp="\\d{4}-\\d{2}-\\d{2}") String date, @Min(0) @Max(10000000) int cardsReviewed, @Min(0) Integer flashcardReviewed, @Min(0) Integer srsReviewed, @Min(0) int newCardsLearned, @DecimalMin("0") @DecimalMax("100") double accuracy, @DecimalMin("0") @DecimalMax("10000000") double timeSpent) {}
+ public record StudyDay(@NotNull @Pattern(regexp="\\d{4}-\\d{2}-\\d{2}") String date, @Min(0) @Max(10000000) int cardsReviewed, @Min(0) Integer flashcardReviewed, @Min(0) Integer srsReviewed, @Min(0) int newCardsLearned, @DecimalMin("0") @DecimalMax("100") double accuracy, @DecimalMin("0") @DecimalMax("10000000") double timeSpent, @Min(0) @Max(10000000) Integer flashcardViewed) {
+  public StudyDay(String date,int cardsReviewed,Integer flashcardReviewed,Integer srsReviewed,int newCardsLearned,double accuracy,double timeSpent){
+   this(date,cardsReviewed,flashcardReviewed,srsReviewed,newCardsLearned,accuracy,timeSpent,null);
+  }
+ }
  public record Snapshot(long revision, List<Bookmark> bookmarks, List<SrsCard> srsCards, List<StudyDay> studyDays) {}
  public record Update(@Min(0) long revision, @NotNull @Size(max=50000) List<@Valid Bookmark> bookmarks, @NotNull @Size(max=50000) List<@Valid SrsCard> srsCards, @NotNull @Size(max=20000) List<@Valid StudyDay> studyDays) {}
  public record Guest(@NotBlank @Size(max=100) String idempotencyKey, @NotNull @Size(max=50000) List<@Valid Bookmark> bookmarks, @NotNull @Size(max=50000) List<@Valid SrsCard> srsCards, @NotNull @Size(max=20000) List<@Valid StudyDay> studyDays) {}

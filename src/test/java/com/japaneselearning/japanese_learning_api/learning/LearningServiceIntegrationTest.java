@@ -53,6 +53,22 @@ class LearningServiceIntegrationTest {
   assertThat(saved.srsCards()).containsExactly(fsrsCard());
   assertThat(service.get(user).srsCards()).containsExactly(fsrsCard());
  }
+ @Test void flashcardViewedSurvivesRoundTripAndGuestMerge(){
+  UUID user=owner();
+  var viewed=new StudyDay("2026-09-26",0,0,0,0,0,3,7);
+  Snapshot saved=service.put(user,new Update(0,List.of(),List.of(),List.of(viewed)));
+  assertThat(saved.studyDays()).containsExactly(viewed);
+  assertThat(service.get(user).studyDays()).containsExactly(viewed);
+  Result merged=service.migrate(user,new Guest("viewed-merge",List.of(),List.of(),List.of(new StudyDay("2026-09-26",0,0,0,0,0,2,5))));
+  assertThat(merged.state().studyDays().getFirst().flashcardViewed()).isEqualTo(12);
+  assertThat(service.get(user).studyDays().getFirst().flashcardViewed()).isEqualTo(12);
+ }
+ @Test void legacyStudyDayWithoutFlashcardViewedStaysNull(){
+  UUID user=owner();service.put(user,new Update(0,List.of(),List.of(),List.of(day(2))));
+  Result merged=service.migrate(user,new Guest("legacy-merge",List.of(),List.of(),List.of(day(1))));
+  assertThat(merged.state().studyDays().getFirst().flashcardViewed()).isNull();
+  assertThat(merged.state().studyDays().getFirst().cardsReviewed()).isEqualTo(3);
+ }
  @Test void builtInReviewsAreAuthoritativeIdempotentAndRejectStaleState(){
   UUID user=owner(),operation=UUID.randomUUID();
   var rating=com.japaneselearning.japanese_learning_api.model.DomainTypes.AnkiRating.GOOD;

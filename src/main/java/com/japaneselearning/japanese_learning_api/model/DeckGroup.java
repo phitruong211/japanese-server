@@ -14,6 +14,8 @@ public class DeckGroup {
     @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private Instant createdAt;
     @UpdateTimestamp @Column(name = "updated_at", nullable = false) private Instant updatedAt;
     @Column(name = "share_token", length = 36, unique = true) private String shareToken;
+    @Column(name = "share_code", length = 8, columnDefinition = "char(8)", unique = true) private String shareCode;
+    @Column(name = "share_expires_at") private Instant shareExpiresAt;
     @Column(name = "share_personal_notes", nullable = false) private boolean sharePersonalNotes;
     @Column(name = "import_key", length = 128) private String importKey;
     @Version private long version;

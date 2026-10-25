@@ -36,16 +36,24 @@ public final class DeckDtos {
     public record MoveCardsRequest(@NotEmpty List<@NotNull UUID> cardIds, @NotNull UUID targetDeckId,
                                    @PositiveOrZero Integer targetPosition) {}
 
+    /** `front`/`back` are required unless `fields` is given; then every legacy column is derived from `fields`. */
     public record CardRequest(
-            @NotBlank @Size(max = 20_000) String front,
-            @NotBlank @Size(max = 20_000) String back,
+            @Size(max = 20_000) String front,
+            @Size(max = 20_000) String back,
             @Size(max = 10_000) String reading,
             @Size(max = 20_000) String notes,
             DomainTypes.CardKind kind,
             @PositiveOrZero Integer position,
             @Size(max = 255) String externalId,
             Map<String, Object> extraData,
-            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags) {}
+            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags,
+            @Size(max = 32) String noteType,
+            Map<String, Object> fields) {
+        public CardRequest(String front, String back, String reading, String notes, DomainTypes.CardKind kind, Integer position,
+                           String externalId, Map<String, Object> extraData, List<String> tags) {
+            this(front, back, reading, notes, kind, position, externalId, extraData, tags, null, null);
+        }
+    }
 
     public record UpdateCardRequest(
             @Size(min = 1, max = 20_000) String front,
@@ -55,7 +63,14 @@ public final class DeckDtos {
             DomainTypes.CardKind kind,
             @PositiveOrZero Integer position,
             Map<String, Object> extraData,
-            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags) {}
+            @Size(max = 100) List<@NotBlank @Size(max = 100) String> tags,
+            @Size(max = 32) String noteType,
+            Map<String, Object> fields) {
+        public UpdateCardRequest(String front, String back, String reading, String notes, DomainTypes.CardKind kind, Integer position,
+                                 Map<String, Object> extraData, List<String> tags) {
+            this(front, back, reading, notes, kind, position, extraData, tags, null, null);
+        }
+    }
 
     public record DeckSummary(UUID id, String name, String description, DomainTypes.SourceType sourceType,
                               String sourceName, String importFormat, DomainTypes.Visibility visibility,
@@ -67,7 +82,8 @@ public final class DeckDtos {
     public record CardResponse(UUID id, UUID deckId, String front, String back, String reading, String notes,
                                DomainTypes.CardKind kind, int position, String externalId,
                                Map<String, Object> extraData, Instant createdAt, Instant updatedAt, List<String> tags,
-                               ProgressResponse progress, String source, String sourceRef, String sourceSheet) {}
+                               ProgressResponse progress, String source, String sourceRef, String sourceSheet,
+                               String noteType, Map<String, Object> fields) {}
     public record ProgressResponse(DomainTypes.AnkiState state, Instant dueAt, Instant lastReviewedAt,
                                    int repetitions, int lapses, java.math.BigDecimal easeFactor, Integer intervalMinutes, Integer intervalDays) {}
     public record PageResponse<T>(List<T> content, long totalElements, int totalPages, int number, int size) {

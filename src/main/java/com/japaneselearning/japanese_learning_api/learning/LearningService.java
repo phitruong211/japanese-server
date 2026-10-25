@@ -154,9 +154,11 @@ public class LearningService {
  }
  private static StudyDay mergeDays(StudyDay a,StudyDay b){
   int total=Math.addExact(a.cardsReviewed(),b.cardsReviewed());
-  return new StudyDay(a.date(),total,Math.addExact(n(a.flashcardReviewed()),n(b.flashcardReviewed())),Math.addExact(n(a.srsReviewed()),n(b.srsReviewed())),Math.addExact(a.newCardsLearned(),b.newCardsLearned()),total==0?0:(a.accuracy()*a.cardsReviewed()+b.accuracy()*b.cardsReviewed())/total,a.timeSpent()+b.timeSpent());
+  return new StudyDay(a.date(),total,Math.addExact(n(a.flashcardReviewed()),n(b.flashcardReviewed())),Math.addExact(n(a.srsReviewed()),n(b.srsReviewed())),Math.addExact(a.newCardsLearned(),b.newCardsLearned()),total==0?0:(a.accuracy()*a.cardsReviewed()+b.accuracy()*b.cardsReviewed())/total,a.timeSpent()+b.timeSpent(),viewed(a.flashcardViewed(),b.flashcardViewed()));
  }
  private static int n(Integer x){return x==null?0:x;}
+ // Keep null when neither side has the field so snapshots from older clients stay unchanged.
+ private static Integer viewed(Integer a,Integer b){return a==null&&b==null?null:Math.addExact(n(a),n(b));}
  private static <T> Map<String,T> index(List<T>items,Function<T,String>key){Map<String,T>m=new LinkedHashMap<>();for(T item:items)m.put(key.apply(item),item);return m;}
  private static void validate(List<Bookmark>b,List<SrsCard>s,List<StudyDay>d){
   if(index(b,x->x.itemType()+":"+x.itemId()).size()!=b.size()||index(s,x->x.deckType()+":"+x.cardId()).size()!=s.size()||index(d,StudyDay::date).size()!=d.size())throw new ApiException(HttpStatus.BAD_REQUEST,"Dữ liệu có khóa trùng");

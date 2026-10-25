@@ -35,7 +35,7 @@ public final class AnkiDtos {
     public record QueueCard(UUID cardId, UUID deckId, String deckName, String front, String back,
                             String reading, String notes, DomainTypes.CardKind kind,
                             Map<String, Object> extraData,
-                            ProgressResponse progress) {}
+                            ProgressResponse progress, String noteType, Map<String, Object> fields) {}
 
     public record UndoResponse(UUID cardId, ProgressResponse progress) {}
 

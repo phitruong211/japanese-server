@@ -25,6 +25,11 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(error(HttpStatus.BAD_REQUEST, "Dữ liệu không hợp lệ", request.getRequestURI(), fields));
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ResponseEntity<ErrorResponse> uploadTooLarge(HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(error(HttpStatus.PAYLOAD_TOO_LARGE, "Tệp tải lên quá lớn (font tối đa 5 MB).", request.getRequestURI(), null));
+    }
+
     @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
     ResponseEntity<ErrorResponse> concurrentUpdate(org.springframework.orm.ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(HttpStatus.CONFLICT,

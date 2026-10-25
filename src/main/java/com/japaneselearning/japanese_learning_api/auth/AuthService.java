@@ -81,6 +81,8 @@ public class AuthService {
         if (stored.getRevokedAt() != null || stored.getExpiresAt().isBefore(Instant.now())) {
             throw ApiException.unauthorized("Refresh token đã hết hạn hoặc bị thu hồi");
         }
+        // A locked or disabled account must not be able to renew its session.
+        requireActive(stored.getUser());
         stored.setRevokedAt(Instant.now());
         return issue(stored.getUser(), request.deviceName());
     }
@@ -92,7 +94,15 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public AuthDtos.UserResponse me(UUID userId) {
-        return toResponse(users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng")));
+        User user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
+        requireActive(user);
+        return toResponse(user);
+    }
+
+    private void requireActive(User user) {
+        if (user.getStatus() != com.japaneselearning.japanese_learning_api.model.DomainTypes.UserStatus.ACTIVE) {
+            throw ApiException.unauthorized("Tài khoản không còn hoạt động");
+        }
     }
 
     private AuthDtos.AuthResponse issue(User user, String deviceName) {

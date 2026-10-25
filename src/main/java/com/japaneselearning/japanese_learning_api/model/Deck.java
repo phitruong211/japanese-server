@@ -41,6 +41,15 @@ public class Deck {
     @Column(name = "import_hash", length = 64) private String importHash;
     @Column(name = "group_id") private UUID groupId;
     @Column(name = "share_token", length = 36, unique = true) private String shareToken;
+    @Column(name = "share_code", length = 8, columnDefinition = "char(8)", unique = true) private String shareCode;
+    @Column(name = "share_expires_at") private Instant shareExpiresAt;
+    @Column(name = "library_level", length = 3) private String libraryLevel;
+    @Column(name = "published_at") private Instant publishedAt;
+    @Column(name = "download_count", nullable = false) private int downloadCount;
+    /** ACTIVE, UNDER_REVIEW (hidden from the library after repeated reports) or REMOVED (taken down by a moderator). */
+    @Column(name = "moderation_status", nullable = false, length = 16) private String moderationStatus = "ACTIVE";
+    @Column(name = "removed_reason", length = 500) private String removedReason;
+    @Column(name = "removed_at") private Instant removedAt;
     @Column(name = "share_personal_notes", nullable = false) private boolean sharePersonalNotes;
     @Version private long version;
 }

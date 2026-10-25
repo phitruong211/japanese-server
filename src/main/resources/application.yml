@@ -21,10 +21,21 @@ spring:
     enabled: true
     baseline-on-migrate: true
 
+  servlet:
+    multipart:
+      # Font uploads (see FontService). Everything else is JSON.
+      max-file-size: 5MB
+      max-request-size: 6MB
+
 server:
   port: ${PORT:8080}
   error:
     include-message: never
+  # Learning snapshots reach ~1.5 MB of repetitive JSON and are returned by every review batch.
+  compression:
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+    mime-types: application/json
+    min-response-size: 2KB
 
 app:
   jwt:
