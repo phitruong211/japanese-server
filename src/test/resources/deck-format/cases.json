@@ -1,0 +1,1031 @@
+{
+ "_comment": "Shared by tests/deckFormat.test.mjs and DeckFormatContractTest. {\"$repeat\",\"times\"} expands to a long string. Unknown fields and style leniency intentionally differ between file import (warns) and the API (rejects), so they are not part of this contract.",
+ "noteTypes": [
+  {
+   "name": "built-in vocabulary type",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "custom type with an extra field, style and pseudo keys",
+   "noteType": {
+    "id": "plus",
+    "name": "Cộng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     },
+     {
+      "key": "level",
+      "label": "Cấp độ",
+      "type": "text",
+      "style": {
+       "colors": {
+        "fg": "#112233"
+       }
+      }
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "level",
+      "@kind"
+     ],
+     "showFront": true,
+     "style": {
+      "theme": "dark",
+      "font": {
+       "family": "notoSerifJp",
+       "size": 24,
+       "bold": true
+      },
+      "align": "left"
+     }
+    },
+    "style": {
+     "colors": {
+      "bg": "#fffaf0"
+     }
+    }
+   },
+   "expect": "ok"
+  },
+  {
+   "name": "duplicate field key",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     },
+     {
+      "key": "notes",
+      "label": "Lặp",
+      "type": "text"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "no back field",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "only one field",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "unknown kind",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "OTHER",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "face shows a field that does not exist",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "ghost"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "face shows nothing",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": []
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "for points at a non-ruby field",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "hanViet"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "id with capitals",
+   "noteType": {
+    "id": "Vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "field key starting with a digit",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     },
+     {
+      "key": "1st",
+      "label": "x",
+      "type": "text"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "unknown field type",
+   "noteType": {
+    "id": "vocab",
+    "name": "Từ vựng",
+    "kind": "VOCABULARY",
+    "fields": [
+     {
+      "key": "front",
+      "label": "Mặt trước",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "frontReading",
+      "label": "Cách đọc mặt trước",
+      "type": "kana",
+      "for": "front"
+     },
+     {
+      "key": "back",
+      "label": "Mặt sau",
+      "type": "ruby",
+      "required": true
+     },
+     {
+      "key": "backReading",
+      "label": "Cách đọc mặt sau",
+      "type": "kana",
+      "for": "back"
+     },
+     {
+      "key": "hanViet",
+      "label": "Hán Việt",
+      "type": "text"
+     },
+     {
+      "key": "notes",
+      "label": "Ghi chú",
+      "type": "text"
+     },
+     {
+      "key": "examples",
+      "label": "Ví dụ",
+      "type": "examples"
+     },
+     {
+      "key": "extra",
+      "label": "x",
+      "type": "html"
+     }
+    ],
+    "front": {
+     "show": [
+      "front",
+      "frontReading"
+     ]
+    },
+    "back": {
+     "show": [
+      "back",
+      "backReading",
+      "hanViet",
+      "notes",
+      "examples"
+     ]
+    }
+   },
+   "expect": "error"
+  }
+ ],
+ "standardNoteType": {
+  "id": "vocab",
+  "name": "Từ vựng",
+  "kind": "VOCABULARY",
+  "fields": [
+   {
+    "key": "front",
+    "label": "Mặt trước",
+    "type": "ruby",
+    "required": true
+   },
+   {
+    "key": "frontReading",
+    "label": "Cách đọc mặt trước",
+    "type": "kana",
+    "for": "front"
+   },
+   {
+    "key": "back",
+    "label": "Mặt sau",
+    "type": "ruby",
+    "required": true
+   },
+   {
+    "key": "backReading",
+    "label": "Cách đọc mặt sau",
+    "type": "kana",
+    "for": "back"
+   },
+   {
+    "key": "hanViet",
+    "label": "Hán Việt",
+    "type": "text"
+   },
+   {
+    "key": "notes",
+    "label": "Ghi chú",
+    "type": "text"
+   },
+   {
+    "key": "examples",
+    "label": "Ví dụ",
+    "type": "examples"
+   }
+  ],
+  "front": {
+   "show": [
+    "front",
+    "frontReading"
+   ]
+  },
+  "back": {
+   "show": [
+    "back",
+    "backReading",
+    "hanViet",
+    "notes",
+    "examples"
+   ]
+  }
+ },
+ "cards": [
+  {
+   "name": "minimal card",
+   "fields": {
+    "front": "猫",
+    "back": "mèo"
+   },
+   "expect": "ok",
+   "front": "猫",
+   "reading": ""
+  },
+  {
+   "name": "furigana markup is stripped and becomes the reading",
+   "fields": {
+    "front": "勉強[べんきょう]する",
+    "back": "học"
+   },
+   "expect": "ok",
+   "front": "勉強する",
+   "reading": "べんきょうする"
+  },
+  {
+   "name": "reading given as markup is reduced to kana",
+   "fields": {
+    "front": "立場",
+    "back": "vị thế",
+    "frontReading": "立場[たちば]"
+   },
+   "expect": "ok",
+   "front": "立場",
+   "reading": "たちば"
+  },
+  {
+   "name": "explicit reading wins over markup",
+   "fields": {
+    "front": "学校[がっこう]",
+    "back": "trường",
+    "frontReading": "がっこう "
+   },
+   "expect": "ok",
+   "front": "学校",
+   "reading": "がっこう"
+  },
+  {
+   "name": "html is left alone",
+   "fields": {
+    "front": "<b>学校[がっこう]</b>",
+    "back": "trường"
+   },
+   "expect": "ok",
+   "front": "<b>学校[がっこう]</b>",
+   "reading": ""
+  },
+  {
+   "name": "malformed markup is kept as written",
+   "fields": {
+    "front": "学校[がっこう",
+    "back": "trường"
+   },
+   "expect": "ok",
+   "front": "学校[がっこう",
+   "reading": ""
+  },
+  {
+   "name": "whitespace is trimmed and blanks dropped",
+   "fields": {
+    "front": "  猫  ",
+    "back": "mèo",
+    "notes": "   "
+   },
+   "expect": "ok",
+   "front": "猫",
+   "reading": ""
+  },
+  {
+   "name": "examples are accepted",
+   "fields": {
+    "front": "猫",
+    "back": "mèo",
+    "examples": [
+     {
+      "japanese": "猫です。",
+      "meaning": "Là mèo."
+     }
+    ]
+   },
+   "expect": "ok",
+   "front": "猫",
+   "reading": ""
+  },
+  {
+   "name": "missing back",
+   "fields": {
+    "front": "猫"
+   },
+   "expect": "error"
+  },
+  {
+   "name": "blank back",
+   "fields": {
+    "front": "猫",
+    "back": "  "
+   },
+   "expect": "error"
+  },
+  {
+   "name": "front is not a string",
+   "fields": {
+    "front": 5,
+    "back": "mèo"
+   },
+   "expect": "error"
+  },
+  {
+   "name": "example without meaning",
+   "fields": {
+    "front": "猫",
+    "back": "mèo",
+    "examples": [
+     {
+      "japanese": "猫"
+     }
+    ]
+   },
+   "expect": "error"
+  },
+  {
+   "name": "examples not a list",
+   "fields": {
+    "front": "猫",
+    "back": "mèo",
+    "examples": {
+     "japanese": "猫",
+     "meaning": "mèo"
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "front over the limit",
+   "fields": {
+    "front": {
+     "$repeat": "x",
+     "times": 20001
+    },
+    "back": "mèo"
+   },
+   "expect": "error"
+  },
+  {
+   "name": "reading over the kana limit",
+   "fields": {
+    "front": "猫",
+    "back": "mèo",
+    "frontReading": {
+     "$repeat": "あ",
+     "times": 10001
+    }
+   },
+   "expect": "error"
+  },
+  {
+   "name": "whole card over 100000 characters",
+   "fields": {
+    "front": {
+     "$repeat": "x",
+     "times": 20000
+    },
+    "back": {
+     "$repeat": "x",
+     "times": 20000
+    },
+    "notes": {
+     "$repeat": "x",
+     "times": 20000
+    },
+    "hanViet": {
+     "$repeat": "x",
+     "times": 20000
+    },
+    "frontReading": {
+     "$repeat": "あ",
+     "times": 10000
+    },
+    "backReading": {
+     "$repeat": "あ",
+     "times": 10000
+    },
+    "examples": [
+     {
+      "japanese": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "meaning": "y"
+     }
+    ]
+   },
+   "expect": "error"
+  }
+ ]
+}

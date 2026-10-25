@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.function.BiConsumer;
 
 @Service
 public class DeckService {
@@ -66,15 +67,16 @@ public class DeckService {
         deck.setSourceType(request.sourceType() == null ? DomainTypes.SourceType.MANUAL : request.sourceType());
         deck.setSourceName(blankToNull(request.sourceName()));
         deck.setImportFormat(request.importFormat() == null ? null : request.importFormat().trim().toUpperCase(Locale.ROOT));
-        deck.setVisibility(request.visibility() == null ? DomainTypes.Visibility.PRIVATE : request.visibility());
+        deck.setVisibility(privateOnly(request.visibility()));
         if (request.templateConfig() != null) deck.setTemplateConfig(validateTemplateConfig(request.templateConfig()));
         deck.setPosition((int) decks.countByOwnerIdAndDeletedAtIsNull(userId));
         List<DeckDtos.CardRequest> requestedCards = request.cards() == null ? List.of() : request.cards();
         deck.setCardCount(requestedCards.size());
         em.persist(deck);
         List<Card> savedCards = new ArrayList<>();
+        var types = new DeckFormat.Types(deck.getTemplateConfig());
         for (int i = 0; i < requestedCards.size(); i++) {
-            Card card = newCard(deck, requestedCards.get(i), i);
+            Card card = newCard(deck, requestedCards.get(i), i, types);
             em.persist(card);
             savedCards.add(card);
         }
@@ -87,7 +89,7 @@ public class DeckService {
         Deck deck = ownedDeck(userId, deckId);
         if (request.name() != null) deck.setName(required(request.name()));
         if (request.description() != null) deck.setDescription(blankToNull(request.description()));
-        if (request.visibility() != null) deck.setVisibility(request.visibility());
+        if (request.visibility() != null) deck.setVisibility(privateOnly(request.visibility()));
         if (request.templateConfig() != null) deck.setTemplateConfig(validateTemplateConfig(request.templateConfig()));
         return summary(deck);
     }
@@ -112,7 +114,7 @@ public class DeckService {
         lockOwner(userId);
         Deck deck = ownedDeck(userId, deckId);
         int position = request.position() == null ? em.createQuery("select coalesce(max(c.position),-1)+1 from Card c where c.deck.id=:deck and c.deletedAt is null", Integer.class).setParameter("deck",deckId).getSingleResult() : request.position();
-        Card card = cards.save(newCard(deck, request, position));
+        Card card = cards.save(newCard(deck, request, position, new DeckFormat.Types(deck.getTemplateConfig())));
         deck.setCardCount((int) cards.countByDeckIdAndDeletedAtIsNull(deckId));
         return cardResponse(card);
     }
@@ -121,13 +123,20 @@ public class DeckService {
     public DeckDtos.CardResponse updateCard(UUID userId, UUID cardId, DeckDtos.UpdateCardRequest request) {
         lockOwner(userId);
         Card card = ownedCard(userId, cardId);
-        if (request.front() != null) card.setFront(required(request.front()));
-        if (request.back() != null) card.setBack(required(request.back()));
-        if (request.reading() != null) card.setReading(blankToNull(request.reading()));
-        if (request.notes() != null) card.setNotes(blankToNull(request.notes()));
-        if (request.kind() != null) card.setKind(request.kind());
+        if (request.fields() != null) {
+            var type = new DeckFormat.Types(card.getDeck().getTemplateConfig()).resolve(request.noteType() != null ? request.noteType() : card.getNoteType());
+            applyFields(card, type, request.fields());
+        } else {
+            if (request.front() != null) card.setFront(required(request.front()));
+            if (request.back() != null) card.setBack(required(request.back()));
+            if (request.reading() != null) card.setReading(blankToNull(request.reading()));
+            if (request.notes() != null) card.setNotes(blankToNull(request.notes()));
+            if (request.kind() != null) card.setKind(request.kind());
+            if (card.getFields() != null) syncFields(card, request);
+        }
         if (request.position() != null) card.setPosition(request.position());
         if (request.extraData() != null) card.setExtraData(new HashMap<>(request.extraData()));
+        validateCardStyle(card);
         if (card.getDictionaryProvenance() != null) card.getExtraData().put("dictionaryRef", card.getDictionaryProvenance());
         else card.getExtraData().remove("dictionaryRef");
         if (request.tags() != null) card.getExtraData().put("tags", List.copyOf(request.tags()));
@@ -218,22 +227,58 @@ public class DeckService {
                 .orElseThrow(() -> ApiException.notFound("Không tìm thấy thẻ"));
     }
 
-    private Card newCard(Deck deck, DeckDtos.CardRequest request, int defaultPosition) {
+    /** A card may carry its own look in extraData.style; it is held to the same rules as every other style. */
+    private void validateCardStyle(Card card) {
+        Object style = card.getExtraData().get("style");
+        if (style != null) DeckFormat.validateStyle(style, "extraData.style");
+    }
+
+    private void applyFields(Card card, DeckFormat.NoteType type, Map<String, Object> fields) {
+        var valid = DeckFormat.validateFields(type, fields);
+        card.setFront(required(valid.front()));
+        card.setBack(required(valid.back()));
+        card.setReading(blankToNull(valid.reading()));
+        card.setNotes(blankToNull(valid.notes()));
+        card.setKind(DomainTypes.CardKind.valueOf(type.kind()));
+        card.setNoteType(type.id());
+        card.setFields(new HashMap<>(valid.fields()));
+    }
+
+    // A legacy edit of a card that has fields must not leave them stale.
+    private void syncFields(Card card, DeckDtos.UpdateCardRequest request) {
+        var type = new DeckFormat.Types(card.getDeck().getTemplateConfig()).resolve(card.getNoteType());
+        var fields = new HashMap<>(card.getFields());
+        BiConsumer<String, String> put = (key, value) -> {
+            if (type.field(key) == null) return;
+            if (value == null || value.isBlank()) fields.remove(key); else fields.put(key, value);
+        };
+        if (request.front() != null) put.accept("front", card.getFront());
+        if (request.back() != null) put.accept("back", card.getBack());
+        if (request.reading() != null) put.accept("frontReading", card.getReading());
+        if (request.notes() != null) put.accept("notes", card.getNotes());
+        card.setFields(fields);
+    }
+
+    private Card newCard(Deck deck, DeckDtos.CardRequest request, int defaultPosition, DeckFormat.Types types) {
         Card card = new Card();
         card.setId(UUID.randomUUID());
         card.setDeck(deck);
         card.setSource(deck.getSource());
         card.setSourceRef(deck.getSourceRef());
         card.setSourceSheet(deck.getSourceSheet());
-        card.setFront(required(request.front()));
-        card.setBack(required(request.back()));
-        card.setReading(blankToNull(request.reading()));
-        card.setNotes(blankToNull(request.notes()));
-        card.setKind(request.kind() == null ? DomainTypes.CardKind.GENERAL : request.kind());
+        if (request.fields() != null) applyFields(card, types.resolve(request.noteType()), request.fields());
+        else {
+            card.setFront(required(request.front()));
+            card.setBack(required(request.back()));
+            card.setReading(blankToNull(request.reading()));
+            card.setNotes(blankToNull(request.notes()));
+            card.setKind(request.kind() == null ? DomainTypes.CardKind.GENERAL : request.kind());
+        }
         card.setPosition(request.position() == null ? defaultPosition : request.position());
         card.setExternalId(blankToNull(request.externalId()));
         card.setExtraData(request.extraData() == null ? new HashMap<>() : new HashMap<>(request.extraData()));
         card.getExtraData().remove("dictionaryRef");
+        validateCardStyle(card);
         if (request.tags() != null) card.getExtraData().put("tags", List.copyOf(request.tags()));
         if (card.getExtraData().get("sourceRef") instanceof String ref) {
             if (ref.length() > 1000) throw bad("Tên nguồn quá dài");
@@ -302,7 +347,7 @@ public class DeckService {
         return new DeckDtos.CardResponse(card.getId(), card.getDeck().getId(), card.getFront(), card.getBack(),
                 card.getReading(), card.getNotes(), card.getKind(), card.getPosition(), card.getExternalId(),
                 extra, card.getCreatedAt(), card.getUpdatedAt(), cardTags(card), null,
-                card.getSource(), card.getSourceRef(), card.getSourceSheet());
+                card.getSource(), card.getSourceRef(), card.getSourceSheet(), card.getNoteType(), card.getFields());
     }
 
     @Transactional(readOnly = true)
@@ -370,7 +415,7 @@ public class DeckService {
         return DeckDtos.PageResponse.from(result.map(card -> {
             var r = cardResponse(card); var p = byId.get(card.getId());
             var progress = p == null ? null : new DeckDtos.ProgressResponse(p.getState(), p.getDueAt(), p.getLastReviewedAt(), p.getRepetitions(), p.getLapses(), p.getEaseFactor(), p.getIntervalMinutes(), p.getIntervalDays());
-            return new DeckDtos.CardResponse(r.id(), r.deckId(), r.front(), r.back(), r.reading(), r.notes(), r.kind(), r.position(), r.externalId(), r.extraData(), r.createdAt(), r.updatedAt(), r.tags(), progress, r.source(), r.sourceRef(), r.sourceSheet());
+            return new DeckDtos.CardResponse(r.id(), r.deckId(), r.front(), r.back(), r.reading(), r.notes(), r.kind(), r.position(), r.externalId(), r.extraData(), r.createdAt(), r.updatedAt(), r.tags(), progress, r.source(), r.sourceRef(), r.sourceSheet(), r.noteType(), r.fields());
         }));
     }
 
@@ -402,13 +447,19 @@ public class DeckService {
         if (request.cards() != null && request.cards().size() > 20_000) throw bad("Tối đa 20.000 thẻ");
         if (mapper.writeValueAsBytes(request).length > 20 * 1024 * 1024) throw new ApiException(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE, "Dữ liệu vượt 20 MB");
         if (request.cards() != null) for (var card : request.cards()) {
-            if (card == null) throw bad("Thẻ không hợp lệ"); required(card.front()); required(card.back());
+            if (card == null) throw bad("Thẻ không hợp lệ");
+            if (card.fields() == null) { required(card.front()); required(card.back()); }
         }
     }
     @Transactional(readOnly = true)
     public List<UUID> cardIds(UUID userId, UUID deckId) {
         ownedDeck(userId, deckId);
         return em.createQuery("select c.id from Card c where c.deck.id = :deck and c.deletedAt is null order by c.position, c.id", UUID.class).setParameter("deck", deckId).getResultList();
+    }
+    /** Going public has rules (daily limit, a link, moderation), so it only happens through LibraryService. */
+    private DomainTypes.Visibility privateOnly(DomainTypes.Visibility requested) {
+        if (requested == DomainTypes.Visibility.PUBLIC) throw bad("Dùng chức năng đăng lên thư viện để công khai bộ thẻ");
+        return DomainTypes.Visibility.PRIVATE;
     }
     private String required(String value) { if (value == null || value.isBlank()) throw bad("Tên, mặt trước và mặt sau không được chỉ chứa khoảng trắng"); return value.trim(); }
     private ApiException bad(String message) { return new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, message); }
@@ -436,9 +487,17 @@ public class DeckService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> validateTemplateConfig(Map<String, Object> config) {
         if (config.size() > 10) throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "Cấu hình thẻ quá lớn");
-        Set<String> allowedRoot = Set.of("version", "front", "back", "style", "study");
+        Set<String> allowedRoot = Set.of("version", "front", "back", "style", "study", "noteTypes");
         if (!allowedRoot.containsAll(config.keySet()))
             throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "Cấu hình thẻ chứa thuộc tính không hỗ trợ");
+        if (mapper.writeValueAsString(config).length() > 200_000) throw bad("Cấu hình thẻ quá lớn");
+        if (Integer.valueOf(5).equals(DeckFormat.version(config))) {
+            if (!Set.of("version", "style", "noteTypes").containsAll(config.keySet())) throw bad("Cấu hình thẻ v5 chỉ gồm version, style và noteTypes");
+            DeckFormat.parseNoteTypes(config.get("noteTypes"));
+            if (config.get("style") != null) DeckFormat.validateStyle(config.get("style"), "style");
+            return new HashMap<>(config);
+        }
+        if (config.containsKey("noteTypes")) throw bad("noteTypes chỉ dùng với cấu hình version 5");
         Object styleValue = config.get("style");
         if (styleValue instanceof Map<?, ?> style) {
             requireAllowed(style, "theme", Set.of("paper", "blue", "dark", "system"));

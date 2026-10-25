@@ -33,6 +33,7 @@ public class SharedDeckContent {
     public UUID copy(UUID userId, Deck source, String key) {
         return copy(userId, source, key, source.isSharePersonalNotes());
     }
+    @SuppressWarnings("unchecked")
     public UUID copy(UUID userId, Deck source, String key, boolean includePersonalNotes) {
         var sourceCards = cards.findShareCardsForCopy(source.getId());
         var includedNotes = new HashMap<String, PersonalCardNote>();
@@ -44,11 +45,11 @@ public class SharedDeckContent {
         }
         var requests = sourceCards.stream().map(c -> new DeckDtos.CardRequest(
                 c.getFront(), c.getBack(), c.getReading(), c.getNotes(), c.getKind(), c.getPosition(), null,
-                sharedExtraData(c), null)).toList();
+                sharedExtraData(c), null, c.getNoteType(), c.getFields())).toList();
         var result = deckService.create(userId, new DeckDtos.CreateDeckRequest(
                 source.getName(), source.getDescription(), DomainTypes.SourceType.IMPORT,
                 "Bộ thẻ được chia sẻ", "SHARED", DomainTypes.Visibility.PRIVATE,
-                new HashMap<>(source.getTemplateConfig()), requests, "IMPORT", null, null, source.getTags()));
+                (Map<String, Object>) DeckFormat.stripCustomFonts(source.getTemplateConfig()), requests, "IMPORT", null, null, source.getTags()));
         em.find(Deck.class, result.deck().id()).setImportKey(key);
         for (int i = 0; i < sourceCards.size(); i++) {
             Card original = sourceCards.get(i);
@@ -70,6 +71,7 @@ public class SharedDeckContent {
         if (card.getDictionaryProvenance() != null) data.put("dictionaryRef", card.getDictionaryProvenance());
         data.remove("sourceRef");
         data.remove("sourceSheet");
+        if (data.get("style") != null) data.put("style", DeckFormat.stripCustomFonts(data.get("style")));
         return data;
     }
 }
