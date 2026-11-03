@@ -37,6 +37,11 @@ public class DeckController {
         return service.cardPage(CurrentUser.id(auth), deckId, page, size, query, type, state, includeProgress);
     }
 
+    @GetMapping("/cards/search")
+    DeckDtos.CardSearchResponse searchCards(Authentication auth, @RequestParam String query, @RequestParam(defaultValue = "20") int limit) {
+        return service.searchCards(CurrentUser.id(auth), query, limit);
+    }
+
     @PostMapping("/decks/import") @ResponseStatus(HttpStatus.CREATED)
     DeckDtos.DeckResponse importDeck(Authentication auth, @RequestHeader("Idempotency-Key") String key,
             @Valid @RequestBody DeckDtos.CreateDeckRequest request) {

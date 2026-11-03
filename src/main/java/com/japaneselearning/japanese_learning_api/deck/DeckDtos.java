@@ -86,6 +86,10 @@ public final class DeckDtos {
                                String noteType, Map<String, Object> fields) {}
     public record ProgressResponse(DomainTypes.AnkiState state, Instant dueAt, Instant lastReviewedAt,
                                    int repetitions, int lapses, java.math.BigDecimal easeFactor, Integer intervalMinutes, Integer intervalDays) {}
+    public record CardSearchHit(UUID cardId, UUID deckId, String deckName, String front, String back, String reading) {}
+    public record DeckSearchHit(UUID id, String name) {}
+    public record CardSearchResponse(List<CardSearchHit> cards, List<DeckSearchHit> decks) {}
+
     public record PageResponse<T>(List<T> content, long totalElements, int totalPages, int number, int size) {
         public static <T> PageResponse<T> from(org.springframework.data.domain.Page<T> page) {
             return new PageResponse<>(page.getContent(), page.getTotalElements(), page.getTotalPages(), page.getNumber(), page.getSize());

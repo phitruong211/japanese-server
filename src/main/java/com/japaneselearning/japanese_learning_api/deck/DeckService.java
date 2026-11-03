@@ -391,7 +391,7 @@ public class DeckService {
             filters.add(cb.isNull(root.get("deletedAt")));
             if (kind != null) filters.add(cb.equal(root.get("kind"), kind));
             if (query != null && !query.isBlank()) {
-                String pattern = "%" + query.trim().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+                String pattern = likePattern(query);
                 filters.add(cb.or(cb.like(cb.lower(root.get("front")), pattern, '!'), cb.like(cb.lower(root.get("back")), pattern, '!'), cb.like(cb.lower(root.get("reading")), pattern, '!'), cb.like(cb.lower(root.get("notes")), pattern, '!')));
             }
             if (state != null && !state.isBlank()) {
@@ -417,6 +417,22 @@ public class DeckService {
             var progress = p == null ? null : new DeckDtos.ProgressResponse(p.getState(), p.getDueAt(), p.getLastReviewedAt(), p.getRepetitions(), p.getLapses(), p.getEaseFactor(), p.getIntervalMinutes(), p.getIntervalDays());
             return new DeckDtos.CardResponse(r.id(), r.deckId(), r.front(), r.back(), r.reading(), r.notes(), r.kind(), r.position(), r.externalId(), r.extraData(), r.createdAt(), r.updatedAt(), r.tags(), progress, r.source(), r.sourceRef(), r.sourceSheet(), r.noteType(), r.fields());
         }));
+    }
+
+    private static final int MAX_SEARCH_LIMIT = 50;
+
+    @Transactional(readOnly = true)
+    public DeckDtos.CardSearchResponse searchCards(UUID userId, String query, int limit) {
+        if (query == null || query.isBlank()) return new DeckDtos.CardSearchResponse(List.of(), List.of());
+        var page = org.springframework.data.domain.PageRequest.of(0, Math.clamp(limit, 1, MAX_SEARCH_LIMIT));
+        String pattern = likePattern(query);
+        return new DeckDtos.CardSearchResponse(
+            cards.searchOwned(userId, pattern, page).stream().map(c -> new DeckDtos.CardSearchHit(c.getId(), c.getDeck().getId(), c.getDeck().getName(), c.getFront(), c.getBack(), c.getReading())).toList(),
+            decks.searchOwnedByName(userId, pattern, page).stream().map(d -> new DeckDtos.DeckSearchHit(d.getId(), d.getName())).toList());
+    }
+
+    private static String likePattern(String query) {
+        return "%" + query.trim().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
     }
 
     @Transactional

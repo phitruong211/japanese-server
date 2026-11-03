@@ -159,6 +159,26 @@ class DeckServiceIntegrationTest {
     DeckDtos.CreateDeckRequest request(String name, List<DeckDtos.CardRequest> cards) {
         return new DeckDtos.CreateDeckRequest(name, null, DomainTypes.SourceType.IMPORT, "test.csv", "CSV", null, null, cards, "IMPORT", "test.csv", "Sheet1", List.of("deck-tag"));
     }
+    @Test void searchCardsIsScopedToOwnerIgnoresCaseEscapesWildcardsAndSkipsDeleted() {
+        UUID owner = user(), stranger = user();
+        var deck = service.create(owner, request("Từ Vựng N3", List.of(card("Ngôn NGỮ"), card("100%"), card("abc"), card("gone"))));
+        service.deleteCard(owner, deck.cards().get(3).id());
+        var gone = service.create(owner, request("Deleted deck", List.of(card("ngôn ngữ")))); service.delete(owner, gone.deck().id());
+        service.create(stranger, request("Từ vựng N3 của người khác", List.of(card("ngôn ngữ"))));
+
+        var hit = service.searchCards(owner, "  ngôn ngữ ", 20);
+        assertThat(hit.cards()).extracting(DeckDtos.CardSearchHit::front).containsExactly("Ngôn NGỮ");
+        assertThat(hit.cards().getFirst().deckName()).isEqualTo("Từ Vựng N3");
+        assertThat(hit.cards().getFirst().deckId()).isEqualTo(deck.deck().id());
+        assertThat(service.searchCards(owner, "từ vựng", 20).decks()).extracting(DeckDtos.DeckSearchHit::id).containsExactly(deck.deck().id());
+        assertThat(service.searchCards(owner, "%", 20).cards()).extracting(DeckDtos.CardSearchHit::front).containsExactly("100%");
+        assertThat(service.searchCards(owner, "_", 20).cards()).isEmpty();
+        assertThat(service.searchCards(owner, "gone", 20).cards()).isEmpty();
+        assertThat(service.searchCards(owner, "meaning", 2).cards()).hasSize(2);
+        assertThat(service.searchCards(owner, " ", 20).cards()).isEmpty();
+        assertThat(service.searchCards(stranger, "abc", 20).cards()).isEmpty();
+        assertThat(service.searchCards(stranger, "ngôn ngữ", 20).cards()).extracting(DeckDtos.CardSearchHit::deckName).containsExactly("Từ vựng N3 của người khác");
+    }
     @Test void importIsIdempotentAndChangedPayloadConflicts() {
         UUID owner = user(); var input = request("Deck", List.of(card("one"),card("two")));
         var first = service.importDeck(owner, "same-key", input);

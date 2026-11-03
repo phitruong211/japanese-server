@@ -68,4 +68,12 @@ public interface CardRepository extends JpaRepository<Card, UUID>, org.springfra
         order by d.updatedAt desc, c.position, c.id
         """)
     List<Card> findNewForAnki(@Param("userId") UUID userId, @Param("deckId") UUID deckId, org.springframework.data.domain.Pageable pageable);
+
+    @Query("""
+        select c from Card c join fetch c.deck d
+        where d.owner.id = :userId and c.deletedAt is null and d.deletedAt is null
+          and (lower(c.front) like :pattern escape '!' or lower(c.back) like :pattern escape '!' or lower(c.reading) like :pattern escape '!')
+        order by d.updatedAt desc, c.position, c.id
+        """)
+    List<Card> searchOwned(@Param("userId") UUID userId, @Param("pattern") String pattern, org.springframework.data.domain.Pageable pageable);
 }

@@ -41,4 +41,7 @@ public interface DeckRepository extends JpaRepository<Deck, UUID> {
     Optional<Deck> findByOwnerIdAndImportKey(UUID ownerId, String importKey);
     List<Deck> findAllByOwnerIdAndDeletedAtIsNullOrderByPositionAscUpdatedAtDesc(UUID ownerId);
     Optional<Deck> findByIdAndOwnerIdAndDeletedAtIsNull(UUID id, UUID ownerId);
+    @org.springframework.data.jpa.repository.Query("select d from Deck d where d.owner.id = :userId and d.deletedAt is null and lower(d.name) like :pattern escape '!' order by d.updatedAt desc, d.id")
+    List<Deck> searchOwnedByName(@org.springframework.data.repository.query.Param("userId") UUID userId,
+        @org.springframework.data.repository.query.Param("pattern") String pattern, org.springframework.data.domain.Pageable pageable);
 }
