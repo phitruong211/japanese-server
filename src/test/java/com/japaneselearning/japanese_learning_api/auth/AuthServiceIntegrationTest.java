@@ -79,6 +79,9 @@ class AuthServiceIntegrationTest {
         AuthDtos.AuthResponse session = registerUser();
         AuthDtos.AuthResponse renewed = authService.refresh(new AuthDtos.RefreshRequest(session.refreshToken(), "integration-test"));
         assertThat(renewed.refreshToken()).isNotEqualTo(session.refreshToken());
+        // The spent token cannot renew a second time (two tabs sending the same token).
+        assertThatThrownBy(() -> authService.refresh(new AuthDtos.RefreshRequest(session.refreshToken(), "integration-test")))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test

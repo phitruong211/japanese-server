@@ -83,7 +83,9 @@ public class AuthService {
         }
         // A locked or disabled account must not be able to renew its session.
         requireActive(stored.getUser());
-        stored.setRevokedAt(Instant.now());
+        if (refreshTokens.revokeIfActive(stored.getId(), Instant.now()) == 0) {
+            throw ApiException.unauthorized("Refresh token đã hết hạn hoặc bị thu hồi");
+        }
         return issue(stored.getUser(), request.deviceName());
     }
 
