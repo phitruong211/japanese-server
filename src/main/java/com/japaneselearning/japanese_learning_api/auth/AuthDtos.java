@@ -21,9 +21,11 @@ public final class AuthDtos {
             @NotBlank String password,
             @Size(max = 200) String deviceName) {}
 
+    public record GoogleLoginRequest(@NotBlank String idToken, @Size(max = 200) String deviceName) {}
+    public record GoogleLinkRequest(@NotBlank String idToken) {}
     public record RefreshRequest(@NotBlank String refreshToken, @Size(max = 200) String deviceName) {}
     public record LogoutRequest(@NotBlank String refreshToken) {}
     public record AuthResponse(String accessToken, String refreshToken, long expiresIn, UserResponse user) {}
     public record UserResponse(UUID id, String email, String displayName, String avatarUrl, String role,
-                               String locale, String timezone, Instant createdAt) {}
+                               String locale, String timezone, Instant createdAt, boolean googleLinked) {}
 }
