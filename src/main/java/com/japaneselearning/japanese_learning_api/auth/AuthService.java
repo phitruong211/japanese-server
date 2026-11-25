@@ -9,6 +9,7 @@ import com.japaneselearning.japanese_learning_api.repository.UserRepository;
 import com.japaneselearning.japanese_learning_api.repository.UserSettingsRepository;
 import com.japaneselearning.japanese_learning_api.security.JwtService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,17 +31,19 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokens;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final GoogleTokenVerifier googleVerifier;
     private final long refreshTokenDays;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AuthService(UserRepository users, UserSettingsRepository settings, RefreshTokenRepository refreshTokens,
-                       PasswordEncoder passwordEncoder, JwtService jwtService,
+                       PasswordEncoder passwordEncoder, JwtService jwtService, GoogleTokenVerifier googleVerifier,
                        @Value("${app.jwt.refresh-token-days}") long refreshTokenDays) {
         this.users = users;
         this.settings = settings;
         this.refreshTokens = refreshTokens;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.googleVerifier = googleVerifier;
         this.refreshTokenDays = refreshTokenDays;
     }
 
@@ -53,13 +56,53 @@ public class AuthService {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setDisplayName(request.displayName().trim());
+        create(user);
+        return issue(user, request.deviceName());
+    }
+
+    private void create(User user) {
         // Flush the parent first. UserSettings uses @MapsId, so Hibernate must
         // know that the User is persistent before it inserts the settings row.
         users.saveAndFlush(user);
         UserSettings preferences = new UserSettings();
         preferences.setUser(user);
         settings.saveAndFlush(preferences);
+    }
+
+    @Transactional
+    public AuthDtos.AuthResponse loginWithGoogle(AuthDtos.GoogleLoginRequest request) {
+        GoogleTokenVerifier.GoogleIdentity google = googleVerifier.verify(request.idToken());
+        User user = users.findByGoogleSub(google.subject()).orElse(null);
+        if (user == null) {
+            String email = normalizeEmail(google.email());
+            // Never merge into an existing password account by email alone: it may have been registered by someone else.
+            if (users.existsByEmailIgnoreCase(email)) throw new ApiException(HttpStatus.CONFLICT, "GOOGLE_NOT_LINKED",
+                    "Email này đã có tài khoản. Hãy đăng nhập bằng mật khẩu rồi liên kết Google trong Cài đặt → Tài khoản.");
+            user = new User();
+            user.setId(UUID.randomUUID());
+            user.setEmail(email);
+            user.setGoogleSub(google.subject());
+            user.setDisplayName(google.displayName());
+            user.setAvatarUrl(google.pictureUrl());
+            user.setEmailVerifiedAt(Instant.now());
+            create(user);
+        }
+        requireActive(user);
+        user.setLastLoginAt(Instant.now());
         return issue(user, request.deviceName());
+    }
+
+    @Transactional
+    public AuthDtos.UserResponse linkGoogle(UUID userId, String idToken) {
+        GoogleTokenVerifier.GoogleIdentity google = googleVerifier.verify(idToken);
+        User user = users.findById(userId).orElseThrow(() -> ApiException.notFound("Không tìm thấy người dùng"));
+        requireActive(user);
+        users.findByGoogleSub(google.subject()).filter(owner -> !owner.getId().equals(userId)).ifPresent(owner -> {
+            throw new ApiException(HttpStatus.CONFLICT, "GOOGLE_ALREADY_LINKED", "Tài khoản Google này đã liên kết với tài khoản khác.");
+        });
+        user.setGoogleSub(google.subject());
+        if (user.getAvatarUrl() == null) user.setAvatarUrl(google.pictureUrl());
+        return toResponse(user);
     }
 
     @Transactional
@@ -136,6 +179,6 @@ public class AuthService {
 
     private AuthDtos.UserResponse toResponse(User user) {
         return new AuthDtos.UserResponse(user.getId(), user.getEmail(), user.getDisplayName(), user.getAvatarUrl(),
-                user.getRole().name(), user.getLocale(), user.getTimezone(), user.getCreatedAt());
+                user.getRole().name(), user.getLocale(), user.getTimezone(), user.getCreatedAt(), user.getGoogleSub() != null);
     }
 }

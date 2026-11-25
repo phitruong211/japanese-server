@@ -20,6 +20,9 @@ public class AuthController {
     @PostMapping("/login")
     AuthDtos.AuthResponse login(@Valid @RequestBody AuthDtos.LoginRequest request) { return authService.login(request); }
 
+    @PostMapping("/google")
+    AuthDtos.AuthResponse google(@Valid @RequestBody AuthDtos.GoogleLoginRequest request) { return authService.loginWithGoogle(request); }
+
     @PostMapping("/refresh")
     AuthDtos.AuthResponse refresh(@Valid @RequestBody AuthDtos.RefreshRequest request) { return authService.refresh(request); }
 

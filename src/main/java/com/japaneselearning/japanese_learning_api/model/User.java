@@ -16,7 +16,8 @@ import java.util.UUID;
 public class User {
     @Id private UUID id;
     @Column(nullable = false, length = 320) private String email;
-    @Column(name = "password_hash", nullable = false) private String passwordHash;
+    @Column(name = "password_hash") private String passwordHash;
+    @Column(name = "google_sub", unique = true) private String googleSub;
     @Column(name = "display_name", nullable = false, length = 100) private String displayName;
     @Column(name = "avatar_url", columnDefinition = "text") private String avatarUrl;
     @Enumerated(EnumType.STRING) @Column(nullable = false) private DomainTypes.Role role = DomainTypes.Role.USER;
